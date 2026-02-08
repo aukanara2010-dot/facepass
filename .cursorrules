@@ -1,0 +1,29 @@
+# FacePass Project Rules
+
+## Architecture Overview
+- This is a Face Recognition System named FacePass.
+- Backend: FastAPI.
+- Database: Dual-database setup (PostgreSQL for metadata, PostgreSQL + pgvector for embeddings).
+- Async: Celery + Redis for heavy face processing.
+
+## Coding Standards (Strict)
+1. **Dependency Injection**: Always use `Depends()` for FastAPI dependencies (DB sessions, security, etc.). Never call generator functions like `get_db()` directly in route handlers.
+2. **SQLAlchemy**: 
+   - Use `db: Session` for database operations.
+   - For `db_vector`, ensure models don't have hard `ForeignKey` constraints to `db_main` tables to avoid initialization errors.
+3. **Pydantic**: 
+   - Use `EmailStr` for all email fields.
+   - Ensure `email-validator` is considered a required dependency.
+4. **Imports**: Always use absolute imports starting from `app.` (e.g., `from app.core.config import settings`).
+
+## Face Recognition Logic
+- Use `services/face_recognition.py` for all InsightFace operations.
+- Long-running tasks must be strictly inside `workers/tasks.py`.
+
+## Common Pitfalls to Avoid
+- DO NOT forget to add new libraries to `requirements.txt`.
+- DO NOT use `localhost` for service-to-service communication; use Docker service names (`db_main`, `db_vector`, `redis`).
+
+Privacy: Никогда не отдавать фото из другого event_id, даже если есть 100% совпадение лица.
+
+Performance: Индексировать поле event_id в векторной базе, чтобы поиск внутри мероприятия на 10 000 фото занимал миллисекунды.

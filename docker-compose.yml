@@ -1,0 +1,100 @@
+
+services:
+  db_main:
+    image: postgres:16
+    container_name: fecapass_db_main
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - main_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fecapass-network
+
+  db_vector:
+    image: ankane/pgvector:latest
+    container_name: fecapass_db_vector
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${VECTOR_POSTGRES_DB}
+    volumes:
+      - vector_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fecapass-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: fecapass_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fecapass-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fecapass_app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/code
+    depends_on:
+      db_main:
+        condition: service_healthy
+      db_vector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - fecapass-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fecapass_worker
+    command: celery -A workers.celery_app worker --loglevel=info
+    volumes:
+      - .:/code
+    depends_on:
+      db_main:
+        condition: service_healthy
+      db_vector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - fecapass-network
+
+volumes:
+  main_db_data:
+  vector_db_data:
+  redis_data:
+
+networks:
+  fecapass-network:
+    driver: bridge
