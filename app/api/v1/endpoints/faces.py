@@ -964,3 +964,233 @@ async def sync_s3_photos(
         s3_prefix=sync_request.s3_prefix,
         message=f"Sync task started for event {event.name}"
     )
+
+
+@router.post("/search-global", response_model=dict)
+async def search_faces_global(
+    file: UploadFile = File(..., description="Selfie photo from user"),
+    threshold: float = Form(0.6, description="Similarity threshold (0.0-1.0)"),
+    limit: int = Form(50, description="Maximum number of results"),
+    db: Session = Depends(get_db),
+    vector_db: Session = Depends(get_vector_db_session)
+):
+    """
+    Global face search across all available sessions (Landing Page functionality)
+    
+    **ENDPOINT FOR LANDING PAGE**
+    
+    This endpoint allows users to search for their photos across all available
+    photo sessions without specifying a particular session ID. It's designed
+    for the main landing page where users don't know which session to search in.
+    
+    Workflow:
+    1. Extracts embedding from uploaded selfie using InsightFace
+    2. Searches across all indexed sessions in vector database
+    3. Groups results by session and returns the best matches
+    4. Provides session information for redirection
+    
+    Args:
+        file: Selfie image from user
+        threshold: Minimum similarity score (0.6 = 60% similar)
+        limit: Maximum number of results per session
+    
+    Returns:
+        Dictionary with sessions containing matches and their photo counts
+    """
+    import time
+    import logging
+    from sqlalchemy import text
+    from services.face_recognition import get_face_recognition_service
+    from core.database import get_pixora_db
+    from models.photo_session import PhotoSession
+    
+    logger = logging.getLogger(__name__)
+    start_time = time.time()
+    
+    logger.info("Starting global face search")
+    
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith('image/'):
+        logger.warning(f"Invalid file type: {file.content_type}")
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Read file data
+    try:
+        file_data = await file.read()
+        logger.info(f"Read file data: {len(file_data)} bytes")
+    except Exception as e:
+        logger.error(f"Error reading file: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
+    
+    # Extract embedding from uploaded selfie using InsightFace
+    try:
+        logger.info("Extracting face embedding...")
+        face_service = get_face_recognition_service()
+        query_embedding, confidence = face_service.extract_single_embedding(file_data)
+        
+        if query_embedding is None:
+            logger.info("No face detected in uploaded image")
+            return {
+                "sessions": [],
+                "total_sessions": 0,
+                "query_time_ms": (time.time() - start_time) * 1000,
+                "message": "No face detected in uploaded image"
+            }
+        
+        logger.info(f"Face embedding extracted with confidence: {confidence}")
+        
+        # Normalize the embedding for consistent similarity calculation
+        import numpy as np
+        embedding_norm = np.linalg.norm(query_embedding)
+        if embedding_norm > 0:
+            query_embedding = query_embedding / embedding_norm
+            logger.info(f"Embedding normalized (original norm: {embedding_norm:.6f})")
+        else:
+            logger.warning("Zero embedding detected, cannot normalize")
+        
+    except RuntimeError as e:
+        logger.error(f"Face recognition service error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Face recognition service error: {str(e)}")
+    except ValueError as e:
+        logger.error(f"Invalid image: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
+    except Exception as e:
+        logger.error(f"Failed to process image: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
+    
+    # Convert embedding to list for SQL query
+    try:
+        query_embedding_list = query_embedding.tolist()
+        query_embedding_str = '[' + ','.join(map(str, query_embedding_list)) + ']'
+        logger.info(f"Embedding converted to string format (length: {len(query_embedding_str)})")
+    except Exception as e:
+        logger.error(f"Error converting embedding: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing embedding: {str(e)}")
+    
+    # Search across all sessions using cosine similarity
+    try:
+        logger.info("Searching across all sessions")
+        
+        # Get sessions with matches above threshold, grouped by session
+        query = text("""
+            SELECT 
+                fe.session_id,
+                COUNT(*) as match_count,
+                MAX(1 - (fe.embedding <=> :query_embedding)) as max_similarity,
+                AVG(1 - (fe.embedding <=> :query_embedding)) as avg_similarity
+            FROM face_embeddings fe
+            WHERE (1 - (fe.embedding <=> :query_embedding)) >= :threshold
+            GROUP BY fe.session_id
+            HAVING COUNT(*) > 0
+            ORDER BY max_similarity DESC, match_count DESC
+            LIMIT 10
+        """)
+        
+        result = vector_db.execute(
+            query,
+            {
+                "query_embedding": query_embedding_str,
+                "threshold": threshold
+            }
+        )
+        
+        # Collect session results
+        session_matches = []
+        for row in result:
+            session_id = row[0]
+            match_count = int(row[1])
+            max_similarity = float(row[2])
+            avg_similarity = float(row[3])
+            
+            session_matches.append({
+                "session_id": session_id,
+                "match_count": match_count,
+                "max_similarity": max_similarity,
+                "avg_similarity": avg_similarity
+            })
+        
+        logger.info(f"Found matches in {len(session_matches)} sessions")
+        
+        if not session_matches:
+            logger.info("No matches found in any session")
+            return {
+                "sessions": [],
+                "total_sessions": 0,
+                "query_time_ms": (time.time() - start_time) * 1000,
+                "message": "No matching faces found in any session",
+                "search_threshold": threshold
+            }
+        
+        # Get session details from external Pixora database
+        pixora_db = None
+        try:
+            pixora_db = next(get_pixora_db())
+            
+            session_ids = [match["session_id"] for match in session_matches]
+            
+            # Query external Pixora database for session details
+            sessions_query = text("""
+                SELECT id, name, created_at, studio_id
+                FROM public.photo_sessions 
+                WHERE id = ANY(:session_ids)
+                    AND facepass_enabled = true
+                ORDER BY created_at DESC
+            """)
+            
+            sessions_result = pixora_db.execute(
+                sessions_query, 
+                {"session_ids": session_ids}
+            )
+            
+            # Create lookup dictionary for session details
+            session_details = {}
+            for session_row in sessions_result:
+                session_details[session_row[0]] = {
+                    "id": session_row[0],
+                    "name": session_row[1],
+                    "created_at": session_row[2].isoformat() if session_row[2] else None,
+                    "studio_id": session_row[3]
+                }
+            
+            logger.info(f"Retrieved details for {len(session_details)} sessions from Pixora database")
+        
+        finally:
+            if pixora_db:
+                pixora_db.close()
+        
+        # Combine match data with session details
+        final_sessions = []
+        for match in session_matches:
+            session_id = match["session_id"]
+            if session_id in session_details:
+                session_info = session_details[session_id]
+                final_sessions.append({
+                    "session_id": session_id,
+                    "session_name": session_info["name"],
+                    "match_count": match["match_count"],
+                    "max_similarity": match["max_similarity"],
+                    "avg_similarity": match["avg_similarity"],
+                    "created_at": session_info["created_at"],
+                    "studio_id": session_info["studio_id"],
+                    "search_url": f"/session/{session_id}"
+                })
+        
+        # Sort by match quality (max similarity first, then count)
+        final_sessions.sort(key=lambda x: (x["max_similarity"], x["match_count"]), reverse=True)
+        
+        # Calculate query time
+        query_time_ms = (time.time() - start_time) * 1000
+        
+        logger.info(f"Global search completed: {len(final_sessions)} sessions with matches in {query_time_ms:.2f}ms")
+        
+        return {
+            "sessions": final_sessions,
+            "total_sessions": len(final_sessions),
+            "query_time_ms": query_time_ms,
+            "search_threshold": threshold,
+            "message": f"Found matches in {len(final_sessions)} photo sessions"
+        }
+        
+    except Exception as e:
+        logger.error(f"Global search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")

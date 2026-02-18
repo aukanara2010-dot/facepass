@@ -175,21 +175,22 @@ async def public_session_interface(session_id: str):
             f'<title>Найти фото - {session.name} | FacePass</title>'
         )
         
-        # Inject session ID
+        # Inject session ID into JavaScript (remove the old method)
+        # Update title and meta tags
         html_content = html_content.replace(
-            "this.getSessionIdFromUrl()",
-            f"'{session_id}'"
+            '<title>FacePass - Поиск фотографий</title>',
+            f'<title>Найти фото - {session.name} | FacePass</title>'
         )
         
-        # Inject session name for OpenGraph
+        # Inject OpenGraph and meta tags
         html_content = html_content.replace(
-            '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
-            f'''<meta name="viewport" content="width=device-width, initial-scale=1.0">
+            '<meta name="description" content="Сделайте селфи, и наш AI покажет все ваши фотографии с фотосессии. Быстро, точно, удобно.">',
+            f'''<meta name="description" content="Найдите свои фотографии с фотосессии '{session.name}' с помощью технологии распознавания лиц FacePass от Pixora">
     
     <!-- OpenGraph Meta Tags -->
     <meta property="og:title" content="Найти фото - {session.name} | FacePass">
     <meta property="og:description" content="Найдите свои фотографии с фотосессии '{session.name}' с помощью технологии распознавания лиц FacePass">
-    <meta property="og:image" content="https://facepass.pixorasoft.ru/static/images/facepass-og.jpg">
+    <meta property="og:image" content="https://facepass.pixorasoft.ru/static/images/facepass-logo.svg">
     <meta property="og:url" content="https://facepass.pixorasoft.ru/session/{session_id}">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="FacePass by Pixora">
@@ -198,16 +199,15 @@ async def public_session_interface(session_id: str):
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Найти фото - {session.name} | FacePass">
     <meta name="twitter:description" content="Найдите свои фотографии с фотосессии '{session.name}' с помощью технологии распознавания лиц FacePass">
-    <meta name="twitter:image" content="https://facepass.pixorasoft.ru/static/images/facepass-og.jpg">
+    <meta name="twitter:image" content="https://facepass.pixorasoft.ru/static/images/facepass-logo.svg">
     
     <!-- Additional Meta Tags -->
-    <meta name="description" content="Найдите свои фотографии с фотосессии '{session.name}' с помощью технологии распознавания лиц FacePass от Pixora">
     <meta name="keywords" content="фотосессия, поиск фото, распознавание лиц, FacePass, Pixora, {session.name}">
     <meta name="author" content="Pixora">
     
     <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
-    <link rel="apple-touch-icon" href="/static/images/apple-touch-icon.png">'''
+    <link rel="icon" type="image/svg+xml" href="/static/images/facepass-logo.svg">
+    <link rel="apple-touch-icon" href="/static/images/facepass-logo.svg">'''
         )
         
         return HTMLResponse(content=html_content)
@@ -217,10 +217,36 @@ async def public_session_interface(session_id: str):
 
 
 @app.get("/")
-async def root():
+async def landing_page():
+    """
+    Serve the main landing page.
+    
+    This is the entry point for users who want to search for their photos.
+    """
+    from fastapi.responses import HTMLResponse
+    import os
+    
+    # Read and serve the landing page HTML
+    html_path = os.path.join("app", "static", "index.html")
+    
+    if not os.path.exists(html_path):
+        return HTMLResponse(
+            content="<h1>Landing page not found</h1>",
+            status_code=500
+        )
+    
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    
+    return HTMLResponse(content=html_content)
+
+
+@app.get("/api")
+async def api_root():
     return {
         "message": "FacePass API", 
         "version": "1.0.0",
         "docs": "/docs",
-        "public_interface": "/session/{session_id}"
+        "public_interface": "/session/{session_id}",
+        "landing_page": "/"
     }

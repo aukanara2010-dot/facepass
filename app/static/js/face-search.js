@@ -1,9 +1,9 @@
 /**
- * FacePass Interactive Photo Search Interface
- * Inspired by super.photo UI/UX
+ * FacePass Session Interface with Landing Design
+ * Combines landing page functionality with session-specific search
  */
 
-class FacePassGallery {
+class FacePassSession {
     constructor() {
         this.sessionId = this.getSessionIdFromUrl();
         this.sessionData = null;
@@ -17,35 +17,27 @@ class FacePassGallery {
     }
 
     getSessionIdFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const pathId = window.location.pathname.split('/').pop();
-        const sessionId = urlParams.get('id') || pathId;
+        // Extract session ID from URL path: /session/{session_id}
+        const pathParts = window.location.pathname.split('/');
+        const sessionId = pathParts[pathParts.length - 1];
         
         console.log('URL pathname:', window.location.pathname);
-        console.log('URL search params:', window.location.search);
-        console.log('Path ID:', pathId);
-        console.log('Session ID from URL params:', urlParams.get('id'));
-        console.log('Final session ID:', sessionId);
+        console.log('Extracted session ID:', sessionId);
         
         return sessionId;
     }
 
     initializeElements() {
-        // States
-        this.loadingState = document.getElementById('loading-state');
-        this.errorState = document.getElementById('error-state');
-        this.mainInterface = document.getElementById('main-interface');
+        // Main sections
         this.heroSection = document.getElementById('hero-section');
-        this.cameraSection = document.getElementById('camera-section');
         this.searchLoading = document.getElementById('search-loading');
         this.noResults = document.getElementById('no-results');
         this.resultsSection = document.getElementById('results-section');
+        this.howItWorks = document.getElementById('how-it-works');
+        this.faqSection = document.getElementById('faq-section');
 
         // Elements
-        this.errorMessage = document.getElementById('error-message');
         this.sessionTitle = document.getElementById('session-title');
-        this.video = document.getElementById('video');
-        this.canvas = document.getElementById('canvas');
         this.fileInput = document.getElementById('file-input');
         this.photosGrid = document.getElementById('photos-grid');
         this.resultsCount = document.getElementById('results-count');
@@ -54,13 +46,21 @@ class FacePassGallery {
         // Buttons
         this.cameraBtn = document.getElementById('camera-btn');
         this.uploadBtn = document.getElementById('upload-btn');
-        this.captureBtn = document.getElementById('capture-btn');
-        this.cancelCameraBtn = document.getElementById('cancel-camera-btn');
         this.tryAgainBtn = document.getElementById('try-again-btn');
         this.selectAllBtn = document.getElementById('select-all-btn');
         this.buySelectedBtn = document.getElementById('buy-selected-btn');
 
-        // Modal
+        // Privacy agreement
+        this.privacyAgreement = document.getElementById('privacy-agreement');
+
+        // Camera modal
+        this.cameraModal = document.getElementById('camera-modal');
+        this.cameraVideo = document.getElementById('camera-video');
+        this.cameraCanvas = document.getElementById('camera-canvas');
+        this.capturePhoto = document.getElementById('capture-photo');
+        this.cancelCamera = document.getElementById('cancel-camera');
+
+        // Photo modal
         this.photoModal = document.getElementById('photo-modal');
         this.modalImage = document.getElementById('modal-image');
         this.modalTitle = document.getElementById('modal-title');
@@ -70,109 +70,159 @@ class FacePassGallery {
 
         // Toast container
         this.toastContainer = document.getElementById('toast-container');
+
+        // FAQ toggles
+        this.faqToggles = document.querySelectorAll('.faq-toggle');
     }
 
     bindEvents() {
-        this.cameraBtn.addEventListener('click', () => this.startCamera());
-        this.uploadBtn.addEventListener('click', () => this.fileInput.click());
-        this.captureBtn.addEventListener('click', () => this.capturePhoto());
-        this.cancelCameraBtn.addEventListener('click', () => this.stopCamera());
-        this.tryAgainBtn.addEventListener('click', () => this.resetToHero());
-        this.selectAllBtn.addEventListener('click', () => this.selectAllPhotos());
-        this.buySelectedBtn.addEventListener('click', () => this.buySelectedPhotos());
+        // Privacy agreement checkbox
+        if (this.privacyAgreement) {
+            this.privacyAgreement.addEventListener('change', () => this.toggleActionButtons());
+        }
         
+        // Main action buttons
+        this.cameraBtn.addEventListener('click', () => this.openCamera());
+        this.uploadBtn.addEventListener('click', () => this.openFileDialog());
+        
+        // File input
         this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
-        this.closeModal.addEventListener('click', () => this.hideModal());
         
-        // Close modal on backdrop click
-        this.photoModal.addEventListener('click', (e) => {
-            if (e.target === this.photoModal) {
-                this.hideModal();
-            }
+        // Camera modal
+        this.capturePhoto.addEventListener('click', () => this.capturePhotoFromCamera());
+        this.cancelCamera.addEventListener('click', () => this.closeCamera());
+        
+        // Try again button
+        if (this.tryAgainBtn) {
+            this.tryAgainBtn.addEventListener('click', () => this.resetToHero());
+        }
+        
+        // Photo selection buttons
+        if (this.selectAllBtn) {
+            this.selectAllBtn.addEventListener('click', () => this.selectAllPhotos());
+        }
+        if (this.buySelectedBtn) {
+            this.buySelectedBtn.addEventListener('click', () => this.buySelectedPhotos());
+        }
+        
+        // Photo modal
+        if (this.closeModal) {
+            this.closeModal.addEventListener('click', () => this.hidePhotoModal());
+        }
+        
+        // FAQ toggles
+        this.faqToggles.forEach(toggle => {
+            toggle.addEventListener('click', () => this.toggleFAQ(toggle));
         });
-
+        
+        // Close modals on backdrop click
+        if (this.cameraModal) {
+            this.cameraModal.addEventListener('click', (e) => {
+                if (e.target === this.cameraModal) {
+                    this.closeCamera();
+                }
+            });
+        }
+        
+        if (this.photoModal) {
+            this.photoModal.addEventListener('click', (e) => {
+                if (e.target === this.photoModal) {
+                    this.hidePhotoModal();
+                }
+            });
+        }
+        
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                this.hideModal();
+                this.closeCamera();
+                this.hidePhotoModal();
             }
         });
     }
 
     async validateSession() {
-        this.showState('loading');
-        
+        if (!this.sessionId || this.sessionId === 'session') {
+            this.showError('Неверный ID сессии');
+            return;
+        }
+
         try {
-            const response = await fetch(`/api/v1/sessions/validate/${this.sessionId}`);
-            const data = await response.json();
+            // Validate session exists and is active
+            const response = await fetch(`/api/v1/faces/session-index-status/${this.sessionId}`);
             
             if (!response.ok) {
-                throw new Error(data.detail || 'Ошибка сервера');
-            }
-            
-            if (!data.valid) {
-                this.showError(data.error || 'Сессия недоступна');
+                if (response.status === 404) {
+                    this.showError('Сессия не найдена');
+                } else if (response.status === 403) {
+                    this.showError('FacePass не активен для этой сессии');
+                } else {
+                    this.showError('Ошибка загрузки сессии');
+                }
                 return;
             }
-            
-            this.sessionData = data.session;
-            this.sessionTitle.textContent = `Найдите себя на фотосессии "${data.session.name}"!`;
-            this.showState('main');
+
+            this.sessionData = await response.json();
+            this.updateSessionTitle();
             
         } catch (error) {
             console.error('Session validation error:', error);
-            this.showError('Не удалось проверить сессию. Проверьте подключение к интернету.');
+            this.showError('Ошибка подключения к серверу');
         }
     }
 
-    showState(state) {
-        // Hide all states
-        this.loadingState.classList.add('hidden');
-        this.errorState.classList.add('hidden');
-        this.mainInterface.classList.add('hidden');
-        this.heroSection.classList.add('hidden');
-        this.cameraSection.classList.add('hidden');
-        this.searchLoading.classList.add('hidden');
-        this.noResults.classList.add('hidden');
-        this.resultsSection.classList.add('hidden');
-
-        // Show requested state
-        switch (state) {
-            case 'loading':
-                this.loadingState.classList.remove('hidden');
-                break;
-            case 'error':
-                this.errorState.classList.remove('hidden');
-                break;
-            case 'main':
-                this.mainInterface.classList.remove('hidden');
-                this.heroSection.classList.remove('hidden');
-                break;
-            case 'camera':
-                this.mainInterface.classList.remove('hidden');
-                this.cameraSection.classList.remove('hidden');
-                break;
-            case 'searching':
-                this.mainInterface.classList.remove('hidden');
-                this.searchLoading.classList.remove('hidden');
-                break;
-            case 'no-results':
-                this.mainInterface.classList.remove('hidden');
-                this.noResults.classList.remove('hidden');
-                break;
-            case 'results':
-                this.mainInterface.classList.remove('hidden');
-                this.resultsSection.classList.remove('hidden');
-                break;
+    updateSessionTitle() {
+        if (this.sessionData && this.sessionData.session_name) {
+            this.sessionTitle.innerHTML = `
+                Найдите себя на фотосессии<br>
+                <span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    "${this.sessionData.session_name}"
+                </span>
+            `;
         }
     }
 
     showError(message) {
-        this.errorMessage.textContent = message;
-        this.showState('error');
+        // Show error in a toast notification
+        this.showToast(message, 'error');
+        
+        // Also update the hero section with error message
+        if (this.sessionTitle) {
+            this.sessionTitle.innerHTML = `
+                <span class="text-red-600">Ошибка: ${message}</span>
+            `;
+        }
     }
 
-    async startCamera() {
+    toggleActionButtons() {
+        const isAgreed = this.privacyAgreement && this.privacyAgreement.checked;
+        
+        if (isAgreed) {
+            // Enable buttons
+            this.cameraBtn.disabled = false;
+            this.uploadBtn.disabled = false;
+            this.cameraBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            this.uploadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            this.cameraBtn.classList.add('hover:shadow-lg', 'hover:-translate-y-1');
+            this.uploadBtn.classList.add('hover:shadow-lg', 'hover:-translate-y-1');
+        } else {
+            // Disable buttons
+            this.cameraBtn.disabled = true;
+            this.uploadBtn.disabled = true;
+            this.cameraBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            this.uploadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            this.cameraBtn.classList.remove('hover:shadow-lg', 'hover:-translate-y-1');
+            this.uploadBtn.classList.remove('hover:shadow-lg', 'hover:-translate-y-1');
+        }
+    }
+
+    // Camera functionality
+    async openCamera() {
+        if (!this.privacyAgreement || !this.privacyAgreement.checked) {
+            this.showToast('Пожалуйста, примите условия обработки персональных данных', 'warning');
+            return;
+        }
+        
         try {
             this.stream = await navigator.mediaDevices.getUserMedia({
                 video: {
@@ -182,8 +232,8 @@ class FacePassGallery {
                 }
             });
             
-            this.video.srcObject = this.stream;
-            this.showState('camera');
+            this.cameraVideo.srcObject = this.stream;
+            this.showModal(this.cameraModal);
             
         } catch (error) {
             console.error('Camera error:', error);
@@ -191,53 +241,69 @@ class FacePassGallery {
         }
     }
 
-    stopCamera() {
+    closeCamera() {
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
         }
-        this.showState('main');
+        this.hideModal(this.cameraModal);
     }
 
-    capturePhoto() {
+    capturePhotoFromCamera() {
         if (!this.stream) return;
 
-        const canvas = this.canvas;
+        const canvas = this.cameraCanvas;
         const context = canvas.getContext('2d');
         
-        canvas.width = this.video.videoWidth;
-        canvas.height = this.video.videoHeight;
+        canvas.width = this.cameraVideo.videoWidth;
+        canvas.height = this.cameraVideo.videoHeight;
         
-        context.drawImage(this.video, 0, 0);
+        context.drawImage(this.cameraVideo, 0, 0);
         
         canvas.toBlob((blob) => {
-            this.stopCamera();
-            this.searchFaces(blob);
+            this.closeCamera();
+            this.processPhoto(blob, 'camera-selfie.jpg');
         }, 'image/jpeg', 0.95);
+    }
+
+    // File upload functionality
+    openFileDialog() {
+        if (!this.privacyAgreement || !this.privacyAgreement.checked) {
+            this.showToast('Пожалуйста, примите условия обработки персональных данных', 'warning');
+            return;
+        }
+        
+        this.fileInput.click();
     }
 
     handleFileUpload(event) {
         const file = event.target.files[0];
         if (file && file.type.startsWith('image/')) {
-            this.searchFaces(file);
+            this.processPhoto(file, file.name);
+        } else {
+            this.showToast('Пожалуйста, выберите изображение', 'error');
         }
         // Reset file input
         event.target.value = '';
     }
 
-    async searchFaces(imageBlob) {
-        this.showState('searching');
+    // Photo processing and search
+    async processPhoto(imageBlob, fileName) {
+        // Hide hero section and show loading
+        this.hideSection(this.heroSection);
+        this.hideSection(this.howItWorks);
+        this.hideSection(this.faqSection);
+        this.showSection(this.searchLoading);
         
         try {
+            // Prepare form data
             const formData = new FormData();
-            formData.append('file', imageBlob, 'search_image.jpg');
+            formData.append('file', imageBlob, fileName);
             formData.append('session_id', this.sessionId);
-            formData.append('threshold', '0.6'); // Lower threshold for better results
+            formData.append('threshold', '0.6');
             formData.append('limit', '50');
             
-            // Show indexing status if needed
-            this.updateSearchStatus('Обрабатываем ваше селфи...');
-            
+            // Make search request
             const response = await fetch('/api/v1/faces/search-session', {
                 method: 'POST',
                 body: formData
@@ -246,284 +312,264 @@ class FacePassGallery {
             const result = await response.json();
             
             if (!response.ok) {
-                // Handle timeout specifically
-                if (response.status === 408) {
-                    this.showToast('Обработка заняла слишком много времени. Попробуйте позже.', 'error');
-                    this.showState('main');
-                    return;
-                }
                 throw new Error(result.detail || 'Ошибка поиска');
             }
             
-            // Handle indexing status
-            if (result.indexing_status) {
-                this.handleIndexingStatus(result);
-            }
+            this.hideSection(this.searchLoading);
             
-            // Log API response for debugging
-            console.log('Search API response:', {
-                session_id: result.session_id,
-                matches_count: result.matches ? result.matches.length : 0,
-                indexing_status: result.indexing_status
-            });
-            
+            // Handle results
             if (result.matches && result.matches.length > 0) {
-                this.displayResults(result.matches);
-                
-                // Show indexing info if it happened
-                if (result.indexing_status === 'completed' && result.indexing_progress) {
-                    const progress = result.indexing_progress;
-                    this.showToast(
-                        `Проиндексировано ${progress.successful_photos} фотографий за ${Math.round(progress.indexing_time_seconds)}с`, 
-                        'success'
-                    );
-                }
+                this.searchResults = result.matches;
+                this.displayResults();
             } else {
-                this.showState('no-results');
-                
-                // Show helpful message if indexing failed
-                if (result.indexing_status === 'indexing_failed') {
-                    this.showToast('Не удалось обработать фотографии сессии. Попробуйте позже.', 'error');
-                }
+                this.showSection(this.noResults);
             }
             
         } catch (error) {
             console.error('Search error:', error);
+            this.hideSection(this.searchLoading);
             this.showToast('Ошибка при поиске фотографий. Попробуйте еще раз.', 'error');
-            this.showState('main');
-        }
-    }
-    
-    handleIndexingStatus(result) {
-        const status = result.indexing_status;
-        const progress = result.indexing_progress;
-        
-        switch (status) {
-            case 'indexing':
-            case 'completed':
-                if (progress && progress.total_photos) {
-                    this.updateSearchStatus(
-                        `Индексируем ${progress.total_photos} фотографий... Это может занять несколько минут.`
-                    );
-                }
-                break;
-                
-            case 'already_indexed':
-                this.updateSearchStatus('Ищем ваши фотографии...');
-                break;
-                
-            case 'no_photos':
-                this.updateSearchStatus('В этой сессии нет фотографий.');
-                break;
-                
-            case 'scan_error':
-            case 'indexing_error':
-                this.updateSearchStatus('Ошибка при обработке фотографий.');
-                break;
-                
-            default:
-                this.updateSearchStatus('Обрабатываем запрос...');
-        }
-    }
-    
-    updateSearchStatus(message) {
-        const searchingDiv = this.searchLoading; // Используем правильную ссылку на элемент
-        if (searchingDiv) {
-            const statusElement = searchingDiv.querySelector('.status-message');
-            if (statusElement) {
-                // Сохраняем анимацию точек для некоторых сообщений
-                if (message.includes('Ищем') || message.includes('анализирует') || message.includes('Обрабатываем')) {
-                    statusElement.innerHTML = message + '<span class="loading-dots"></span>';
-                } else {
-                    statusElement.textContent = message;
-                }
-            }
+            this.resetToHero();
         }
     }
 
-    displayResults(matches) {
-        this.searchResults = matches.sort((a, b) => b.similarity - a.similarity);
+    displayResults() {
+        this.showSection(this.resultsSection);
+        
+        // Update results count
+        this.resultsCount.textContent = `Найдено ${this.searchResults.length} фотографий с вашим лицом`;
+        
+        // Clear previous results
+        this.photosGrid.innerHTML = '';
         this.selectedPhotos.clear();
         
-        this.resultsCount.textContent = `Найдено ${matches.length} фотографий`;
-        this.photosGrid.innerHTML = '';
-        
-        matches.forEach((photo, index) => {
+        // Create photo cards
+        this.searchResults.forEach((photo, index) => {
             const photoCard = this.createPhotoCard(photo, index);
             this.photosGrid.appendChild(photoCard);
         });
         
         this.updateSelectedCount();
-        this.showState('results');
-        
-        // Animate cards appearance
-        setTimeout(() => {
-            const cards = this.photosGrid.querySelectorAll('.photo-card');
-            cards.forEach((card, index) => {
-                setTimeout(() => {
-                    card.classList.add('animate-slide-up');
-                }, index * 100);
-            });
-        }, 100);
     }
 
     createPhotoCard(photo, index) {
         const card = document.createElement('div');
-        card.className = 'photo-card bg-white rounded-xl overflow-hidden shadow-lg cursor-pointer transform transition-all duration-300';
+        card.className = 'photo-card bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer';
+        card.dataset.photoId = photo.id;
+        card.dataset.index = index;
         
         const similarityPercent = Math.round(photo.similarity * 100);
-        const isSelected = this.selectedPhotos.has(photo.id);
+        
+        // Use S3 URL from environment or construct from preview_path
+        let previewUrl;
+        if (photo.preview_path) {
+            // If preview_path is a full URL, use it directly
+            if (photo.preview_path.startsWith('http')) {
+                previewUrl = photo.preview_path;
+            } else {
+                // Construct S3 URL from preview_path
+                const s3BaseUrl = 'https://de45bff1c874-pixora-store.s3.ru1.storage.beget.cloud';
+                previewUrl = `${s3BaseUrl}/${photo.preview_path}`;
+            }
+        } else {
+            // Fallback: construct from session and file_name
+            const s3BaseUrl = 'https://de45bff1c874-pixora-store.s3.ru1.storage.beget.cloud';
+            previewUrl = `${s3BaseUrl}/staging/photos/${this.sessionId}/previews/${photo.file_name}`;
+        }
         
         card.innerHTML = `
             <div class="relative">
-                <img src="${photo.preview_path || photo.file_path}" 
-                     alt="Фото ${index + 1}" 
-                     class="w-full h-48 object-cover"
-                     loading="lazy">
+                <img src="${previewUrl}" alt="Фото ${index + 1}" class="w-full h-48 object-cover">
                 <div class="absolute top-2 right-2">
                     <span class="similarity-badge text-white px-2 py-1 rounded-full text-xs font-semibold">
-                        ${similarityPercent}%
+                        ${similarityPercent}% совпадение
                     </span>
                 </div>
                 <div class="absolute top-2 left-2">
-                    <input type="checkbox" 
-                           class="photo-checkbox w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
-                           ${isSelected ? 'checked' : ''}
-                           data-photo-id="${photo.id}">
+                    <input type="checkbox" class="photo-checkbox w-5 h-5 text-blue-600 rounded" data-photo-id="${photo.id}">
                 </div>
             </div>
             <div class="p-4">
-                <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-600">Схожесть: ${similarityPercent}%</span>
-                    <button class="select-photo-btn bg-purple-600 text-white px-3 py-1 rounded-lg text-sm hover:bg-purple-700 transition-colors"
-                            data-photo-id="${photo.id}">
-                        ${isSelected ? 'Убрать' : 'Выбрать'}
-                    </button>
-                </div>
+                <h3 class="font-semibold text-gray-900 mb-2">Фото ${index + 1}</h3>
+                <p class="text-sm text-gray-600 mb-3">Сходство: ${similarityPercent}%</p>
+                <button class="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors view-photo-btn">
+                    Просмотреть
+                </button>
             </div>
         `;
         
-        // Event listeners
-        const img = card.querySelector('img');
+        // Add event listeners
         const checkbox = card.querySelector('.photo-checkbox');
-        const selectBtn = card.querySelector('.select-photo-btn');
+        const viewBtn = card.querySelector('.view-photo-btn');
         
-        img.addEventListener('click', () => this.showModal(photo));
-        
-        checkbox.addEventListener('change', () => {
-            this.togglePhotoSelection(photo.id);
-            selectBtn.textContent = checkbox.checked ? 'Убрать' : 'Выбрать';
+        checkbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                this.selectedPhotos.add(photo.id);
+            } else {
+                this.selectedPhotos.delete(photo.id);
+            }
+            this.updateSelectedCount();
         });
         
-        selectBtn.addEventListener('click', (e) => {
+        viewBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.togglePhotoSelection(photo.id);
-            checkbox.checked = this.selectedPhotos.has(photo.id);
-            selectBtn.textContent = checkbox.checked ? 'Убрать' : 'Выбрать';
+            this.showPhotoModal(photo, index);
+        });
+        
+        card.addEventListener('click', () => {
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change'));
         });
         
         return card;
     }
 
-    showModal(photo) {
-        this.modalImage.src = photo.preview_path || photo.file_path;
-        this.modalTitle.textContent = `Фото - Схожесть ${Math.round(photo.similarity * 100)}%`;
-        this.modalSimilarity.textContent = `${Math.round(photo.similarity * 100)}% схожести`;
+    showPhotoModal(photo, index) {
+        // Use S3 URL from environment or construct from preview_path
+        let previewUrl;
+        if (photo.preview_path) {
+            // If preview_path is a full URL, use it directly
+            if (photo.preview_path.startsWith('http')) {
+                previewUrl = photo.preview_path;
+            } else {
+                // Construct S3 URL from preview_path
+                const s3BaseUrl = 'https://de45bff1c874-pixora-store.s3.ru1.storage.beget.cloud';
+                previewUrl = `${s3BaseUrl}/${photo.preview_path}`;
+            }
+        } else {
+            // Fallback: construct from session and file_name
+            const s3BaseUrl = 'https://de45bff1c874-pixora-store.s3.ru1.storage.beget.cloud';
+            previewUrl = `${s3BaseUrl}/staging/photos/${this.sessionId}/previews/${photo.file_name}`;
+        }
         
+        const similarityPercent = Math.round(photo.similarity * 100);
+        
+        this.modalImage.src = previewUrl;
+        this.modalTitle.textContent = `Фото ${index + 1}`;
+        this.modalSimilarity.textContent = `${similarityPercent}% совпадение`;
+        
+        // Update modal select button
+        const isSelected = this.selectedPhotos.has(photo.id);
+        this.modalSelectBtn.textContent = isSelected ? 'Убрать из выбранных' : 'Выбрать для покупки';
         this.modalSelectBtn.onclick = () => {
-            this.togglePhotoSelection(photo.id);
-            this.updatePhotoCard(photo.id);
-            this.modalSelectBtn.textContent = this.selectedPhotos.has(photo.id) ? 'Убрать из выбранных' : 'Выбрать для покупки';
+            const checkbox = document.querySelector(`input[data-photo-id="${photo.id}"]`);
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change'));
+                this.modalSelectBtn.textContent = checkbox.checked ? 'Убрать из выбранных' : 'Выбрать для покупки';
+            }
         };
         
-        this.modalSelectBtn.textContent = this.selectedPhotos.has(photo.id) ? 'Убрать из выбранных' : 'Выбрать для покупки';
-        this.photoModal.classList.remove('hidden');
+        this.showModal(this.photoModal);
     }
 
-    hideModal() {
-        this.photoModal.classList.add('hidden');
-    }
-
-    togglePhotoSelection(photoId) {
-        if (this.selectedPhotos.has(photoId)) {
-            this.selectedPhotos.delete(photoId);
-        } else {
-            this.selectedPhotos.add(photoId);
-        }
-        this.updateSelectedCount();
-    }
-
-    updatePhotoCard(photoId) {
-        const checkbox = document.querySelector(`input[data-photo-id="${photoId}"]`);
-        const selectBtn = document.querySelector(`button[data-photo-id="${photoId}"]`);
-        
-        if (checkbox && selectBtn) {
-            checkbox.checked = this.selectedPhotos.has(photoId);
-            selectBtn.textContent = checkbox.checked ? 'Убрать' : 'Выбрать';
-        }
-    }
-
-    updateSelectedCount() {
-        this.selectedCount.textContent = this.selectedPhotos.size;
-        this.buySelectedBtn.disabled = this.selectedPhotos.size === 0;
-        
-        if (this.selectedPhotos.size === 0) {
-            this.buySelectedBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        } else {
-            this.buySelectedBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-        }
+    hidePhotoModal() {
+        this.hideModal(this.photoModal);
     }
 
     selectAllPhotos() {
-        this.searchResults.forEach(photo => {
-            this.selectedPhotos.add(photo.id);
+        const checkboxes = document.querySelectorAll('.photo-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = true;
+            this.selectedPhotos.add(checkbox.dataset.photoId);
         });
-        
-        // Update all checkboxes and buttons
-        this.searchResults.forEach(photo => {
-            this.updatePhotoCard(photo.id);
-        });
-        
         this.updateSelectedCount();
-        this.showToast(`Выбрано ${this.selectedPhotos.size} фотографий`, 'success');
+    }
+
+    updateSelectedCount() {
+        if (this.selectedCount) {
+            this.selectedCount.textContent = this.selectedPhotos.size;
+        }
     }
 
     buySelectedPhotos() {
-        if (this.selectedPhotos.size === 0) return;
-        
-        console.log('Current session ID for purchase:', this.sessionId);
-        
-        if (!this.sessionId || this.sessionId === 'undefined') {
-            this.showToast('Ошибка: ID сессии не найден. Обновите страницу.', 'error');
+        if (this.selectedPhotos.size === 0) {
+            this.showToast('Выберите хотя бы одну фотографию', 'warning');
             return;
         }
         
-        const selectedFileNames = this.searchResults
-            .filter(photo => this.selectedPhotos.has(photo.id))
-            .map(photo => photo.file_name || photo.id)
-            .join(',');
+        // Create purchase URL with selected photo IDs
+        const selectedIds = Array.from(this.selectedPhotos);
+        const purchaseUrl = `https://staging.pixorasoft.ru/purchase?session_id=${this.sessionId}&photos=${selectedIds.join(',')}`;
         
-        // Use staging domain for now, will be changed to production later
-        const purchaseUrl = `https://staging.pixorasoft.ru/session/${this.sessionId}?selected=${selectedFileNames}`;
+        // Open purchase page
+        window.open(purchaseUrl, '_blank');
         
-        console.log('Purchase URL:', purchaseUrl);
-        
-        this.showToast(`Перенаправление на страницу покупки...`, 'info');
-        
-        setTimeout(() => {
-            window.open(purchaseUrl, '_blank');
-        }, 1000);
+        this.showToast(`Переход к покупке ${this.selectedPhotos.size} фотографий`, 'success');
     }
 
     resetToHero() {
-        this.selectedPhotos.clear();
+        // Hide all sections except hero
+        this.hideSection(this.searchLoading);
+        this.hideSection(this.noResults);
+        this.hideSection(this.resultsSection);
+        
+        // Show hero and info sections
+        this.showSection(this.heroSection);
+        this.showSection(this.howItWorks);
+        this.showSection(this.faqSection);
+        
+        // Clear results
         this.searchResults = [];
-        this.showState('main');
+        this.selectedPhotos.clear();
+    }
+
+    // FAQ functionality
+    toggleFAQ(toggle) {
+        const content = toggle.nextElementSibling;
+        const icon = toggle.querySelector('i');
+        
+        if (content.classList.contains('hidden')) {
+            // Close all other FAQ items
+            this.faqToggles.forEach(otherToggle => {
+                if (otherToggle !== toggle) {
+                    const otherContent = otherToggle.nextElementSibling;
+                    const otherIcon = otherToggle.querySelector('i');
+                    otherContent.classList.add('hidden');
+                    otherIcon.style.transform = 'rotate(0deg)';
+                }
+            });
+            
+            // Open this FAQ item
+            content.classList.remove('hidden');
+            icon.style.transform = 'rotate(180deg)';
+        } else {
+            // Close this FAQ item
+            content.classList.add('hidden');
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    // Utility methods
+    showSection(section) {
+        if (section) {
+            section.classList.remove('hidden');
+        }
+    }
+
+    hideSection(section) {
+        if (section) {
+            section.classList.add('hidden');
+        }
+    }
+
+    showModal(modal) {
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    hideModal(modal) {
+        if (modal) {
+            modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
     }
 
     showToast(message, type = 'info') {
         const toast = document.createElement('div');
-        toast.className = `toast bg-white border-l-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+        toast.className = `bg-white border-l-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full max-w-sm`;
         
         const colors = {
             success: 'border-green-500 text-green-700',
@@ -543,12 +589,10 @@ class FacePassGallery {
         
         toast.innerHTML = `
             <div class="flex items-center">
-                <span class="mr-2">${icons[type]}</span>
-                <span>${message}</span>
-                <button class="ml-4 text-gray-400 hover:text-gray-600" onclick="this.parentElement.parentElement.remove()">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
+                <span class="mr-3 text-lg">${icons[type]}</span>
+                <span class="flex-1">${message}</span>
+                <button onclick="this.closest('div').remove()" class="ml-3 text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
         `;
@@ -562,17 +606,47 @@ class FacePassGallery {
         
         // Auto remove after 5 seconds
         setTimeout(() => {
-            toast.classList.add('translate-x-full');
-            setTimeout(() => {
-                if (toast.parentElement) {
-                    toast.remove();
-                }
-            }, 300);
+            if (toast.parentElement) {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (toast.parentElement) {
+                        toast.remove();
+                    }
+                }, 300);
+            }
         }, 5000);
     }
 }
 
-// Initialize the application
+// Initialize the session interface
 document.addEventListener('DOMContentLoaded', () => {
-    new FacePassGallery();
+    new FacePassSession();
+});
+
+// Add smooth scrolling for anchor links
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
+    
+    // Add scroll effect to header
+    let lastScrollY = window.scrollY;
+    window.addEventListener('scroll', () => {
+        const header = document.querySelector('header');
+        if (window.scrollY > lastScrollY && window.scrollY > 100) {
+            header.style.transform = 'translateY(-100%)';
+        } else {
+            header.style.transform = 'translateY(0)';
+        }
+        lastScrollY = window.scrollY;
+    });
 });

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FacePass - Поиск фотографий</title>
+    <title>PHOTO POINT - Найдите себя на фотосессии по лицу</title>
     <meta name="description" content="Сделайте селфи, и наш AI покажет все ваши фотографии с фотосессии. Быстро, точно, удобно.">
     
     <!-- Tailwind CSS -->
@@ -103,19 +103,6 @@
         .animate-pulse-slow {
             animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
-        
-        .photo-card {
-            transition: all 0.3s ease;
-        }
-        
-        .photo-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-        }
-        
-        .similarity-badge {
-            background: linear-gradient(45deg, #10b981, #059669);
-        }
     </style>
 </head>
 <body class="font-sans bg-gradient-bg min-h-screen">
@@ -148,13 +135,13 @@
     </header>
 
     <!-- Hero Section -->
-    <section id="hero-section" class="hero-gradient py-20 lg:py-32">
+    <section class="hero-gradient py-20 lg:py-32">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="grid lg:grid-cols-2 gap-12 items-center">
                 <!-- Left Column - Content -->
                 <div class="text-center lg:text-left">
                     <!-- Main Heading -->
-                    <h1 id="session-title" class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
+                    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
                         Найдите себя на 
                         <span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                             фотосессии по лицу
@@ -169,26 +156,15 @@
                     
                     <!-- Action Buttons -->
                     <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                        <button id="camera-btn" class="btn-camera text-white px-8 py-4 rounded-2xl font-semibold text-lg flex items-center justify-center space-x-3 transition-all duration-300 min-w-[200px] opacity-50 cursor-not-allowed" disabled>
+                        <button id="camera-btn" class="btn-camera text-white px-8 py-4 rounded-2xl font-semibold text-lg flex items-center justify-center space-x-3 transition-all duration-300 min-w-[200px]">
                             <i class="fas fa-camera text-xl"></i>
                             <span>Снять с камеры</span>
                         </button>
                         
-                        <button id="upload-btn" class="btn-upload text-white px-8 py-4 rounded-2xl font-semibold text-lg flex items-center justify-center space-x-3 transition-all duration-300 min-w-[200px] opacity-50 cursor-not-allowed" disabled>
+                        <button id="upload-btn" class="btn-upload text-white px-8 py-4 rounded-2xl font-semibold text-lg flex items-center justify-center space-x-3 transition-all duration-300 min-w-[200px]">
                             <i class="fas fa-cloud-upload-alt text-xl"></i>
                             <span>Загрузить фото</span>
                         </button>
-                    </div>
-                    
-                    <!-- Privacy Agreement -->
-                    <div class="flex items-start space-x-3 mt-6 max-w-2xl">
-                        <input type="checkbox" id="privacy-agreement" class="mt-1 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2">
-                        <label for="privacy-agreement" class="text-sm text-gray-600 leading-relaxed">
-                            Я принимаю 
-                            <a href="#" class="text-blue-600 hover:text-blue-800 underline">правила обработки персональных данных</a> 
-                            и подтверждаю согласие с 
-                            <a href="#" class="text-blue-600 hover:text-blue-800 underline">публичной офертой</a>.
-                        </label>
                     </div>
                     
                     <!-- Hidden File Input -->
@@ -218,66 +194,8 @@
         </div>
     </section>
 
-    <!-- Loading Search -->
-    <div id="search-loading" class="hidden py-20 bg-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <div class="bg-white rounded-2xl p-8 max-w-md mx-auto shadow-lg border">
-                <div class="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                <h3 class="text-lg font-semibold text-gray-900 mb-2">Ищем ваши фотографии...</h3>
-                <p class="text-gray-600 status-message">Наш AI анализирует ваше лицо</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- No Results -->
-    <div id="no-results" class="hidden py-20 bg-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <div class="bg-white rounded-2xl p-8 max-w-md mx-auto shadow-lg border">
-                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-search text-2xl text-gray-400"></i>
-                </div>
-                <h3 class="text-xl font-bold text-gray-900 mb-4">Фотографии не найдены</h3>
-                <p class="text-gray-600 mb-6">
-                    К сожалению, мы не смогли найти ваши фотографии в этой фотосессии. 
-                    Попробуйте загрузить другое селфи с лучшим качеством.
-                </p>
-                <button id="try-again-btn" class="bg-blue-500 text-white py-3 px-6 rounded-xl font-semibold hover:bg-blue-600 transition-colors">
-                    Попробовать снова
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Results Section -->
-    <div id="results-section" class="hidden py-20 bg-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <!-- Results Header -->
-            <div class="text-center mb-16">
-                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-                    Ваши фотографии найдены!
-                </h2>
-                <p id="results-count" class="text-xl text-gray-600"></p>
-            </div>
-            
-            <!-- Photos Grid -->
-            <div id="photos-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
-                <!-- Photos will be inserted here -->
-            </div>
-            
-            <!-- Action Buttons -->
-            <div class="text-center">
-                <button id="select-all-btn" class="bg-blue-500 text-white px-8 py-4 rounded-xl font-semibold hover:bg-blue-600 transition-colors mr-4 mb-4">
-                    Выбрать все фотографии
-                </button>
-                <button id="buy-selected-btn" class="bg-green-500 text-white px-8 py-4 rounded-xl font-semibold hover:bg-green-600 transition-colors mb-4">
-                    Купить выбранные (<span id="selected-count">0</span>)
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- How It Works Section -->
-    <section id="how-it-works" class="py-20 bg-white">
+    <section class="py-20 bg-white">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Section Header -->
             <div class="text-center mb-16">
@@ -311,7 +229,7 @@
                     <h3 class="text-xl font-bold text-gray-900 mb-4">2. AI сканирует базу</h3>
                     <p class="text-gray-600">
                         Искусственный интеллект ищет ваше лицо среди 
-                        фотографий этой сессии с высокой точностью.
+                        тысяч фотографий с высокой точностью.
                     </p>
                 </div>
                 
@@ -331,7 +249,7 @@
     </section>
 
     <!-- FAQ Section -->
-    <section id="faq-section" class="py-20 bg-gray-50">
+    <section class="py-20 bg-gray-50">
         <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Section Header -->
             <div class="text-center mb-16">
@@ -381,13 +299,27 @@
                     </button>
                     <div class="faq-content hidden px-6 pb-5">
                         <p class="text-gray-600">
-                            Обычно поиск занимает от 10 до 30 секунд, в зависимости от размера фотосессии. 
+                            Обычно поиск занимает от 10 до 30 секунд, в зависимости от размера базы фотографий. 
                             Для больших фотосессий время может увеличиться до 1-2 минут.
                         </p>
                     </div>
                 </div>
                 
                 <!-- FAQ Item 4 -->
+                <div class="faq-item bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-gray-50 transition-colors">
+                        <span class="font-semibold text-gray-900">Можно ли найти фото других людей?</span>
+                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+                    </button>
+                    <div class="faq-content hidden px-6 pb-5">
+                        <p class="text-gray-600">
+                            Нет, система показывает только те фотографии, на которых найдено лицо с загруженного селфи. 
+                            Мы строго соблюдаем приватность и не предоставляем доступ к чужим фотографиям.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- FAQ Item 5 -->
                 <div class="faq-item bg-white rounded-xl border border-gray-200 overflow-hidden">
                     <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-gray-50 transition-colors">
                         <span class="font-semibold text-gray-900">Что делать, если фото не найдены?</span>
@@ -426,9 +358,9 @@
                 <div>
                     <h3 class="font-semibold mb-4">Сервис</h3>
                     <ul class="space-y-2 text-gray-400">
-                        <li><a href="#how-it-works" class="hover:text-white transition-colors">Как это работает</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Как это работает</a></li>
                         <li><a href="#" class="hover:text-white transition-colors">Поддержка</a></li>
-                        <li><a href="#faq-section" class="hover:text-white transition-colors">FAQ</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">FAQ</a></li>
                     </ul>
                 </div>
                 
@@ -474,30 +406,12 @@
         </div>
     </div>
 
-    <!-- Photo Modal -->
-    <div id="photo-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl max-w-4xl max-h-[90vh] overflow-hidden">
-            <div class="flex justify-between items-center p-4 border-b">
-                <h3 id="modal-title" class="text-lg font-semibold">Предварительный просмотр</h3>
-                <button id="close-modal" class="text-gray-500 hover:text-gray-700 p-2">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="p-4">
-                <img id="modal-image" src="" alt="" class="w-full h-auto max-h-[60vh] object-contain rounded-lg">
-                <div class="flex justify-between items-center mt-4">
-                    <div>
-                        <span id="modal-similarity" class="similarity-badge text-white px-3 py-1 rounded-full text-sm font-semibold"></span>
-                    </div>
-                    <div class="flex gap-3">
-                        <button id="modal-select-btn" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-                            Выбрать для покупки
-                        </button>
-                    </div>
-                </div>
-            </div>
+    <!-- Loading Modal -->
+    <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-8 max-w-sm w-full text-center">
+            <div class="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Ищем ваши фотографии...</h3>
+            <p class="text-gray-600">Это может занять несколько секунд</p>
         </div>
     </div>
 
@@ -505,6 +419,6 @@
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <!-- JavaScript -->
-    <script src="/static/js/face-search.js"></script>
+    <script src="js/landing.js"></script>
 </body>
 </html>
