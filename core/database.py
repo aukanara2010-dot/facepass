@@ -35,6 +35,16 @@ vector_engine = create_engine(
 
 VectorSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=vector_engine)
 
+# External Pixora Database Engine (Read-only)
+pixora_engine = create_engine(
+    settings.MAIN_APP_DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10
+)
+
+PixoraSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=pixora_engine)
+
 # Base class for models
 Base = declarative_base()
 
@@ -79,6 +89,28 @@ def get_vector_db() -> Generator[Session, None, None]:
             return db.query(FaceEmbedding).all()
     """
     db = VectorSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_pixora_db() -> Generator[Session, None, None]:
+    """
+    Dependency for external Pixora database session (READ-ONLY).
+    
+    This function provides read-only access to the external Pixora database
+    for session validation and FacePass status checking.
+    
+    Yields:
+        Session: SQLAlchemy session for Pixora database
+        
+    Example:
+        @app.get("/session/{session_id}")
+        def validate_session(session_id: str, pixora_db: Session = Depends(get_pixora_db)):
+            return pixora_db.query(PhotoSession).filter_by(id=session_id).first()
+    """
+    db = PixoraSessionLocal()
     try:
         yield db
     finally:

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FacePass - Поиск фотографий</title>
+    
+    <!-- OpenGraph Meta Tags (will be replaced by server) -->
+    <meta property="og:title" content="FacePass - Поиск фотографий по лицу">
+    <meta property="og:description" content="Найдите свои фотографии с фотосессии с помощью технологии распознавания лиц FacePass от Pixora">
+    <meta property="og:image" content="https://facepass.pixorasoft.ru/static/images/facepass-og.jpg">
+    <meta property="og:url" content="https://facepass.pixorasoft.ru">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="FacePass by Pixora">
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="FacePass - Поиск фотографий по лицу">
+    <meta name="twitter:description" content="Найдите свои фотографии с фотосессии с помощью технологии распознавания лиц FacePass от Pixora">
+    <meta name="twitter:image" content="https://facepass.pixorasoft.ru/static/images/facepass-og.jpg">
+    
+    <!-- Additional Meta Tags -->
+    <meta name="description" content="Найдите свои фотографии с фотосессии с помощью технологии распознавания лиц FacePass от Pixora">
+    <meta name="keywords" content="фотосессия, поиск фото, распознавание лиц, FacePass, Pixora, искусственный интеллект">
+    <meta name="author" content="Pixora">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/static/images/facepass-logo.svg">
+    <link rel="apple-touch-icon" href="/static/images/facepass-logo.svg">
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://staging.pixorasoft.ru">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .photo-card {
+            transition: all 0.3s ease;
+        }
+        
+        .photo-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        .similarity-badge {
+            background: linear-gradient(45deg, #10b981, #059669);
+        }
+        
+        .camera-container {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        }
+        
+        .loading-dots {
+            display: inline-block;
+        }
+        
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+    </style>
+</head>
+<body class="min-h-screen gradient-bg">
+    <!-- Header -->
+    <header class="py-6 px-4">
+        <div class="max-w-6xl mx-auto flex items-center justify-center">
+            <div class="text-center">
+                <div class="flex items-center justify-center gap-3 mb-2">
+                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    <h1 class="text-2xl font-bold text-white">FacePass</h1>
+                </div>
+                <p class="text-white/80 text-sm">Powered by Pixora</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-6xl mx-auto px-4 pb-8">
+        <!-- Loading State -->
+        <div id="loading-state" class="text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
+            <p class="text-white text-lg">Загрузка сессии<span class="loading-dots"></span></p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="hidden">
+            <div class="glass-effect rounded-2xl p-8 text-center max-w-md mx-auto">
+                <div class="text-6xl mb-4">❌</div>
+                <h2 class="text-2xl font-bold text-white mb-4">Ошибка</h2>
+                <p id="error-message" class="text-white/80 mb-6"></p>
+                <button onclick="window.location.reload()" 
+                        class="bg-white text-purple-600 px-6 py-3 rounded-xl font-semibold hover:bg-gray-100 transition-colors">
+                    Попробовать снова
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Interface -->
+        <div id="main-interface" class="hidden">
+            <!-- Hero Section -->
+            <div id="hero-section" class="text-center mb-12">
+                <h1 id="session-title" class="text-4xl md:text-5xl font-bold text-white mb-4 animate-fade-in">
+                    Найдите себя на фотосессии!
+                </h1>
+                <p class="text-xl text-white/90 mb-8 animate-slide-up">
+                    Сделайте селфи, и наш AI покажет все ваши фотографии
+                </p>
+                
+                <!-- Action Buttons -->
+                <div class="flex flex-col sm:flex-row gap-4 justify-center items-center max-w-md mx-auto">
+                    <button id="camera-btn" class="w-full sm:w-auto bg-white text-purple-600 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-all transform hover:scale-105 flex items-center justify-center gap-3">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Сделать селфи
+                    </button>
+                    
+                    <button id="upload-btn" class="w-full sm:w-auto glass-effect text-white px-8 py-4 rounded-xl font-semibold hover:bg-white/20 transition-all transform hover:scale-105 flex items-center justify-center gap-3">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        Загрузить фото
+                    </button>
+                </div>
+                
+                <input type="file" id="file-input" accept="image/*" class="hidden">
+            </div>
+
+            <!-- Camera Section -->
+            <div id="camera-section" class="hidden mb-8">
+                <div class="glass-effect rounded-2xl p-6 max-w-md mx-auto">
+                    <div class="camera-container bg-black rounded-xl mb-4 relative" style="aspect-ratio: 4/3;">
+                        <video id="video" autoplay muted playsinline class="w-full h-full object-cover rounded-xl"></video>
+                        <canvas id="canvas" class="hidden"></canvas>
+                        <div class="camera-overlay"></div>
+                    </div>
+                    
+                    <div class="flex gap-3 justify-center">
+                        <button id="capture-btn" class="bg-white text-purple-600 px-6 py-3 rounded-xl font-semibold hover:bg-gray-100 transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            Сделать снимок
+                        </button>
+                        <button id="cancel-camera-btn" class="glass-effect text-white px-6 py-3 rounded-xl font-semibold hover:bg-white/20 transition-colors">
+                            Отмена
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Search -->
+            <div id="search-loading" class="hidden text-center py-12">
+                <div class="glass-effect rounded-2xl p-8 max-w-md mx-auto">
+                    <div class="animate-pulse-slow mb-4">
+                        <svg class="w-16 h-16 text-white mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Ищем ваши фотографии</h3>
+                    <p class="text-white/80 status-message">Наш AI анализирует ваше лицо<span class="loading-dots"></span></p>
+                </div>
+            </div>
+
+            <!-- No Results -->
+            <div id="no-results" class="hidden text-center py-12">
+                <div class="glass-effect rounded-2xl p-8 max-w-md mx-auto">
+                    <div class="text-6xl mb-4">🔍</div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Ничего не найдено</h3>
+                    <p class="text-white/80 mb-6">К сожалению, мы не нашли ваши фотографии. Попробуйте другое селфи!</p>
+                    <button id="try-again-btn" class="bg-white text-purple-600 px-6 py-3 rounded-xl font-semibold hover:bg-gray-100 transition-colors">
+                        Попробовать снова
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Grid -->
+            <div id="results-section" class="hidden">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-bold text-white mb-2">Ваши фотографии найдены!</h2>
+                    <p id="results-count" class="text-white/80"></p>
+                </div>
+                
+                <div id="photos-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    <!-- Photos will be inserted here -->
+                </div>
+                
+                <div class="text-center">
+                    <button id="select-all-btn" class="bg-white text-purple-600 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-all transform hover:scale-105 mr-4">
+                        Выбрать все фотографии
+                    </button>
+                    <button id="buy-selected-btn" class="glass-effect text-white px-8 py-4 rounded-xl font-semibold hover:bg-white/20 transition-all transform hover:scale-105">
+                        Купить выбранные (<span id="selected-count">0</span>)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo Modal -->
+    <div id="photo-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-4xl max-h-[90vh] overflow-hidden">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h3 id="modal-title" class="text-lg font-semibold">Предварительный просмотр</h3>
+                <button id="close-modal" class="text-gray-500 hover:text-gray-700 p-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-4">
+                <img id="modal-image" src="" alt="" class="w-full h-auto max-h-[60vh] object-contain rounded-lg">
+                <div class="flex justify-between items-center mt-4">
+                    <div>
+                        <span id="modal-similarity" class="similarity-badge text-white px-3 py-1 rounded-full text-sm font-semibold"></span>
+                    </div>
+                    <div class="flex gap-3">
+                        <button id="modal-select-btn" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            Выбрать для покупки
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2">
+        <!-- Toasts will be inserted here -->
+    </div>
+
+    <script src="/static/js/face-search.js"></script>
+</body>
+</html>

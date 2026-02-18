@@ -105,10 +105,15 @@ class FaceRecognitionService:
             for face in faces:
                 embedding = face.embedding  # 512-dimensional vector
                 confidence = float(face.det_score)  # Detection confidence
+                
+                # Verify embedding is normalized (InsightFace should provide normalized embeddings)
+                norm = np.linalg.norm(embedding)
+                logger.debug(f"Embedding norm: {norm:.6f} (should be ~1.0 for normalized vectors)")
+                
                 results.append((embedding, confidence))
-                logger.debug(f"Detected face with confidence: {confidence:.3f}")
+                logger.debug(f"Detected face with confidence: {confidence:.3f} using buffalo_l model")
             
-            logger.info(f"Extracted {len(results)} face embedding(s)")
+            logger.info(f"Extracted {len(results)} face embedding(s) using buffalo_l model")
             return results
             
         except Exception as e:

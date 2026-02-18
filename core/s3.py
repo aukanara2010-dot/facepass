@@ -62,7 +62,13 @@ def get_s3_client():
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
             region_name=settings.S3_REGION,
-            config=Config(signature_version='s3v4')
+            config=Config(
+                signature_version='s3v4',
+                s3={
+                    'payload_signing_enabled': False,  # Disable Content-SHA256 to fix XAmzContentSHA256Mismatch
+                    'addressing_style': 'path'  # Use path-style addressing for compatibility
+                }
+            )
         )
     except Exception as e:
         logger.error(f"Failed to create S3 client: {e}")

@@ -178,6 +178,15 @@ def search_similar_faces_task(self, image_data: bytes, event_id: int, threshold:
             
             logger.info(f"Search face detected with confidence: {confidence:.3f}")
             
+            # Normalize the embedding for consistent similarity calculation
+            import numpy as np
+            embedding_norm = np.linalg.norm(query_embedding)
+            if embedding_norm > 0:
+                query_embedding = query_embedding / embedding_norm
+                logger.info(f"Search embedding normalized (original norm: {embedding_norm:.6f})")
+            else:
+                logger.warning("Zero search embedding detected, cannot normalize")
+            
         except Exception as e:
             logger.error(f"Failed to extract embedding from search image: {e}")
             raise
@@ -198,16 +207,16 @@ def search_similar_faces_task(self, image_data: bytes, event_id: int, threshold:
             logger.info(f"Filtering search to event_id={event_id}")
             
             # Vector similarity search with event_id filter
-            # Note: <-> is cosine distance, <#> is inner product, <=> is L2 distance
+            # Using cosine similarity <=> for robust vector comparison
             query = text(f"""
                 SELECT 
                     face_id,
                     event_id,
-                    1 - (embedding <-> :query_embedding) as similarity
+                    1 - (embedding <=> :query_embedding) as similarity
                 FROM face_embeddings
                 WHERE event_id = :event_id
-                    AND (1 - (embedding <-> :query_embedding)) >= :threshold
-                ORDER BY embedding <-> :query_embedding
+                    AND (1 - (embedding <=> :query_embedding)) >= :threshold
+                ORDER BY embedding <=> :query_embedding ASC
                 LIMIT :limit
             """)
             

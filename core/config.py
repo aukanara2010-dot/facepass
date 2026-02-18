@@ -21,9 +21,13 @@ class Settings(BaseSettings):
     """
     
     # Application Settings
-    APP_NAME: str = "Fecapass"
+    APP_NAME: str = "FacePass"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
+    
+    # Domain configuration
+    DOMAIN: str = "facepass.pixorasoft.ru"
+    STAGING_DOMAIN: str = "staging.pixorasoft.ru"
     
     # Database - Main (Required fields)
     POSTGRES_USER: str
@@ -52,6 +56,9 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str
     S3_BUCKET: str
     S3_REGION: str = "ru-1"
+    
+    # External Pixora Database
+    MAIN_APP_DATABASE_URL: str
     
     # Face Recognition Settings (Default values provided)
     FACE_DETECTION_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0)

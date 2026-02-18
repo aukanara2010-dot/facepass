@@ -1,120 +1,318 @@
-import sys
-import logging
-from sqlalchemy import text, MetaData
-from core.database import vector_engine, main_engine, Base
-from core.config import get_settings
+#!/usr/bin/env python3
+"""
+Initialize FacePass database tables.
 
-# Import models to register them with Base
-from models.event import Event
+This script creates the necessary tables for FacePass in both
+the main database and vector database.
+"""
+
+import sys
+import os
+import logging
+
+# Add the project root to Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from sqlalchemy import create_engine, text
+from core.config import get_settings
+from core.database import Base, main_engine, vector_engine
 from models.face import Face, FaceEmbedding
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-settings = get_settings()
 
-
-def init_vector_extension():
-    """Initialize pgvector extension in vector database"""
-    try:
-        with vector_engine.connect() as conn:
-            # Set search path to public schema
-            conn.execute(text("SET search_path TO public"))
-            # Create vector extension
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            conn.commit()
-            logger.info("✓ pgvector extension initialized successfully")
-    except Exception as e:
-        logger.error(f"✗ Failed to initialize pgvector extension: {e}")
-        sys.exit(1)
-
-
-def create_main_tables():
-    """
-    Create tables for main database (Event, Face)
+def init_main_database():
+    """Initialize main database tables."""
+    print("🗄️  Initializing main database...")
     
-    These tables do NOT use vector type, so they're safe to create
-    in the main database.
-    """
     try:
-        # Create metadata for main database tables only
-        main_metadata = MetaData()
-        
-        # Register only Event and Face tables (not FaceEmbedding)
-        Event.__table__.to_metadata(main_metadata)
-        Face.__table__.to_metadata(main_metadata)
-        
         # Create tables in main database
-        main_metadata.create_all(bind=main_engine)
-        logger.info("✓ Main database tables created successfully (events, faces)")
+        Base.metadata.create_all(bind=main_engine, tables=[Face.__table__])
+        
+        # Test connection
+        with main_engine.connect() as conn:
+            result = conn.execute(text("SELECT 1")).fetchone()
+            print(f"✅ Main database connected: {result[0]}")
+            
+            # Check if faces table exists
+            table_check = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'faces'
+                );
+            """)).fetchone()
+            
+            if table_check[0]:
+                print("✅ faces table created/exists")
+            else:
+                print("❌ faces table was not created")
+                return False
+        
+        return True
+        
     except Exception as e:
-        logger.error(f"✗ Failed to create main database tables: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        print(f"❌ Main database initialization failed: {str(e)}")
+        return False
 
 
-def create_vector_tables():
-    """
-    Create tables for vector database (FaceEmbedding)
+def init_vector_database():
+    """Initialize vector database tables."""
+    print("\n🔍 Initializing vector database...")
     
-    This table uses the vector type, so it MUST be created
-    in the vector database where pgvector extension is installed.
-    """
     try:
+        # First, ensure pgvector extension is installed
         with vector_engine.connect() as conn:
-            # Set search path to public schema
-            conn.execute(text("SET search_path TO public"))
-            conn.commit()
-        
-        # Create metadata for vector database tables only
-        vector_metadata = MetaData()
-        
-        # Register only FaceEmbedding table
-        FaceEmbedding.__table__.to_metadata(vector_metadata)
+            try:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                conn.commit()
+                print("✅ pgvector extension enabled")
+            except Exception as e:
+                print(f"⚠️  Could not enable pgvector extension: {str(e)}")
+                print("   Make sure pgvector is installed on your PostgreSQL server")
         
         # Create tables in vector database
-        vector_metadata.create_all(bind=vector_engine)
-        logger.info("✓ Vector database tables created successfully (face_embeddings)")
+        Base.metadata.create_all(bind=vector_engine, tables=[FaceEmbedding.__table__])
+        
+        # Test connection and table
+        with vector_engine.connect() as conn:
+            result = conn.execute(text("SELECT 1")).fetchone()
+            print(f"✅ Vector database connected: {result[0]}")
+            
+            # Check if face_embeddings table exists
+            table_check = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'face_embeddings'
+                );
+            """)).fetchone()
+            
+            if table_check[0]:
+                print("✅ face_embeddings table created/exists")
+                
+                # Check if vector column exists with correct dimension
+                try:
+                    settings = get_settings()
+                    vector_check = conn.execute(text("""
+                        SELECT column_name, data_type 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'face_embeddings' 
+                            AND column_name = 'embedding'
+                    """)).fetchone()
+                    
+                    if vector_check:
+                        print(f"✅ embedding column exists: {vector_check[1]}")
+                    else:
+                        print("❌ embedding column not found")
+                        return False
+                        
+                except Exception as e:
+                    print(f"⚠️  Could not verify vector column: {str(e)}")
+            else:
+                print("❌ face_embeddings table was not created")
+                return False
+        
+        return True
+        
     except Exception as e:
-        logger.error(f"✗ Failed to create vector database tables: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        print(f"❌ Vector database initialization failed: {str(e)}")
+        return False
 
 
-def verify_configuration():
-    """Verify database configuration"""
-    logger.info("Database configuration:")
-    logger.info(f"  Main DB URL: {settings.main_database_url}")
-    logger.info(f"  Vector DB URL: {settings.vector_database_url}")
+def create_indexes():
+    """Create performance indexes."""
+    print("\n📊 Creating performance indexes...")
     
-    # Check that databases are different
-    if settings.main_database_url == settings.vector_database_url:
-        logger.warning("⚠ Main and Vector databases are the same!")
-        logger.warning("  This is OK for development, but not recommended for production")
+    try:
+        # Indexes for main database
+        with main_engine.connect() as conn:
+            indexes = [
+                "CREATE INDEX IF NOT EXISTS idx_faces_session_id ON faces(session_id)",
+                "CREATE INDEX IF NOT EXISTS idx_faces_photo_id ON faces(photo_id)",
+                "CREATE INDEX IF NOT EXISTS idx_faces_created_at ON faces(created_at)",
+            ]
+            
+            for index_sql in indexes:
+                try:
+                    conn.execute(text(index_sql))
+                    print(f"✅ Created index: {index_sql.split('idx_')[1].split(' ')[0]}")
+                except Exception as e:
+                    print(f"⚠️  Index creation warning: {str(e)}")
+            
+            conn.commit()
+        
+        # Indexes for vector database
+        with vector_engine.connect() as conn:
+            indexes = [
+                "CREATE INDEX IF NOT EXISTS idx_face_embeddings_session_id ON face_embeddings(session_id)",
+                "CREATE INDEX IF NOT EXISTS idx_face_embeddings_photo_id ON face_embeddings(photo_id)",
+                "CREATE INDEX IF NOT EXISTS idx_face_embeddings_created_at ON face_embeddings(created_at)",
+            ]
+            
+            for index_sql in indexes:
+                try:
+                    conn.execute(text(index_sql))
+                    print(f"✅ Created index: {index_sql.split('idx_')[1].split(' ')[0]}")
+                except Exception as e:
+                    print(f"⚠️  Index creation warning: {str(e)}")
+            
+            # Create vector similarity index (HNSW)
+            try:
+                hnsw_index = """
+                CREATE INDEX IF NOT EXISTS idx_face_embeddings_embedding_hnsw 
+                ON face_embeddings 
+                USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64)
+                """
+                conn.execute(text(hnsw_index))
+                print("✅ Created HNSW vector similarity index")
+            except Exception as e:
+                print(f"⚠️  HNSW index creation failed: {str(e)}")
+                print("   Trying IVFFlat index as fallback...")
+                
+                try:
+                    ivfflat_index = """
+                    CREATE INDEX IF NOT EXISTS idx_face_embeddings_embedding_ivfflat 
+                    ON face_embeddings 
+                    USING ivfflat (embedding vector_cosine_ops)
+                    WITH (lists = 100)
+                    """
+                    conn.execute(text(ivfflat_index))
+                    print("✅ Created IVFFlat vector similarity index")
+                except Exception as e2:
+                    print(f"❌ Vector index creation failed: {str(e2)}")
+                    print("   Vector similarity search may be slow without indexes")
+            
+            conn.commit()
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Index creation failed: {str(e)}")
+        return False
+
+
+def verify_setup():
+    """Verify the database setup."""
+    print("\n🔍 Verifying database setup...")
+    
+    try:
+        settings = get_settings()
+        
+        # Check main database
+        with main_engine.connect() as conn:
+            # Count faces table
+            count = conn.execute(text("SELECT COUNT(*) FROM faces")).fetchone()
+            print(f"✅ faces table: {count[0]} records")
+        
+        # Check vector database
+        with vector_engine.connect() as conn:
+            # Count face_embeddings table
+            count = conn.execute(text("SELECT COUNT(*) FROM face_embeddings")).fetchone()
+            print(f"✅ face_embeddings table: {count[0]} records")
+            
+            # Test vector operations
+            try:
+                # Create a test vector
+                test_vector = "[" + ",".join(["0.1"] * settings.EMBEDDING_DIMENSION) + "]"
+                
+                # Test vector similarity query (should work even with empty table)
+                test_query = text("""
+                    SELECT COUNT(*) 
+                    FROM face_embeddings 
+                    WHERE (1 - (embedding <=> :test_vector)) > 0.5
+                """)
+                
+                result = conn.execute(test_query, {"test_vector": test_vector}).fetchone()
+                print(f"✅ Vector similarity operations working: {result[0]} matches")
+                
+            except Exception as e:
+                print(f"⚠️  Vector operations test failed: {str(e)}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Verification failed: {str(e)}")
+        return False
 
 
 def main():
-    logger.info("=" * 60)
-    logger.info("FacePass Database Initialization")
-    logger.info("=" * 60)
+    """Main initialization function."""
+    print("🚀 Starting FacePass Database Initialization\n")
     
-    verify_configuration()
+    try:
+        settings = get_settings()
+        print(f"📋 Configuration:")
+        print(f"   Main DB: {settings.main_database_url}")
+        print(f"   Vector DB: {settings.vector_database_url}")
+        print(f"   Embedding Dimension: {settings.EMBEDDING_DIMENSION}")
+        
+    except Exception as e:
+        print(f"❌ Configuration error: {str(e)}")
+        return False
     
-    logger.info("\nStep 1: Initialize pgvector extension...")
-    init_vector_extension()
+    steps = [
+        ("Main Database", init_main_database),
+        ("Vector Database", init_vector_database),
+        ("Performance Indexes", create_indexes),
+        ("Setup Verification", verify_setup),
+    ]
     
-    logger.info("\nStep 2: Create main database tables...")
-    create_main_tables()
+    results = []
     
-    logger.info("\nStep 3: Create vector database tables...")
-    create_vector_tables()
+    for step_name, step_func in steps:
+        print(f"\n{'='*50}")
+        print(f"Step: {step_name}")
+        print('='*50)
+        
+        try:
+            result = step_func()
+            results.append((step_name, result))
+            
+            if not result:
+                print(f"❌ {step_name} failed. Stopping initialization.")
+                break
+                
+        except Exception as e:
+            print(f"❌ {step_name} crashed: {str(e)}")
+            results.append((step_name, False))
+            break
     
-    logger.info("\n" + "=" * 60)
-    logger.info("✓ Database initialization completed successfully!")
-    logger.info("=" * 60)
+    # Summary
+    print(f"\n{'='*50}")
+    print("INITIALIZATION SUMMARY")
+    print('='*50)
+    
+    passed = 0
+    for step_name, result in results:
+        status = "✅ SUCCESS" if result else "❌ FAILED"
+        print(f"{status} - {step_name}")
+        if result:
+            passed += 1
+    
+    print(f"\nCompleted: {passed}/{len(results)} steps")
+    
+    if passed == len(results):
+        print("\n🎉 Database initialization completed successfully!")
+        print("\n📋 Next steps:")
+        print("1. Run configuration tests: python test_s3_config.py")
+        print("2. Start the FastAPI server: uvicorn app.main:app --reload")
+        print("3. Test the interface: http://localhost:8000/session/{session_id}")
+        return True
+    else:
+        print("\n❌ Database initialization failed.")
+        print("\n🔧 Troubleshooting:")
+        print("1. Check database connections in .env")
+        print("2. Ensure PostgreSQL is running")
+        print("3. Install pgvector extension: CREATE EXTENSION vector;")
+        print("4. Check database permissions")
+        return False
 
 
 if __name__ == "__main__":
-    main()
+    success = main()
+    sys.exit(0 if success else 1)
