@@ -4,6 +4,24 @@ from fastapi.staticfiles import StaticFiles
 from app.api.v1.router import api_router
 import asyncio
 
+# Import models to ensure they are registered with Base
+from models.event import Event
+from models.face import Face, FaceEmbedding
+from core.database import Base, main_engine, vector_engine
+
+# Create tables if they don't exist
+try:
+    # Create main database tables
+    Base.metadata.create_all(bind=main_engine, tables=[Event.__table__, Face.__table__])
+    print("✅ Main database tables created/verified")
+    
+    # Create vector database tables
+    Base.metadata.create_all(bind=vector_engine, tables=[FaceEmbedding.__table__])
+    print("✅ Vector database tables created/verified")
+    
+except Exception as e:
+    print(f"⚠️ Database table creation warning: {str(e)}")
+
 # Increase timeout for long-running operations like photo indexing
 # This is especially important for the first-time indexing of large photo sessions
 asyncio.get_event_loop().set_debug(False)

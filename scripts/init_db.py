@@ -17,6 +17,7 @@ from sqlalchemy import create_engine, text
 from core.config import get_settings
 from core.database import Base, main_engine, vector_engine
 from models.face import Face, FaceEmbedding
+from models.event import Event
 
 # Configure logging
 logging.basicConfig(
@@ -32,7 +33,7 @@ def init_main_database():
     
     try:
         # Create tables in main database
-        Base.metadata.create_all(bind=main_engine, tables=[Face.__table__])
+        Base.metadata.create_all(bind=main_engine, tables=[Face.__table__, Event.__table__])
         
         # Test connection
         with main_engine.connect() as conn:
@@ -40,17 +41,31 @@ def init_main_database():
             print(f"✅ Main database connected: {result[0]}")
             
             # Check if faces table exists
-            table_check = conn.execute(text("""
+            faces_check = conn.execute(text("""
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
                     WHERE table_name = 'faces'
                 );
             """)).fetchone()
             
-            if table_check[0]:
+            # Check if events table exists
+            events_check = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'events'
+                );
+            """)).fetchone()
+            
+            if faces_check[0]:
                 print("✅ faces table created/exists")
             else:
                 print("❌ faces table was not created")
+                return False
+                
+            if events_check[0]:
+                print("✅ events table created/exists")
+            else:
+                print("❌ events table was not created")
                 return False
         
         return True
