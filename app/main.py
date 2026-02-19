@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import PlainTextResponse
 from app.api.v1.router import api_router
 import asyncio
 
@@ -47,7 +48,34 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "Accept"],
 )
 
-# Custom middleware for handling long-running operations
+# Custom middleware for handling long-running operations and permissions
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    
+    # Security headers
+    response.headers["Permissions-Policy"] = "camera=(self)"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    
+    # Content Security Policy
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: https: blob:; "
+        "media-src 'self' blob:; "
+        "connect-src 'self' https:; "
+        "frame-src 'none'; "
+        "object-src 'none'; "
+        "base-uri 'self';"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    
+    return response
 @app.middleware("http")
 async def timeout_middleware(request, call_next):
     """
@@ -93,6 +121,52 @@ async def timeout_middleware(request, call_next):
 # Mount static files for gallery and session interface
 app.mount("/gallery", StaticFiles(directory="app/static/gallery", html=True), name="gallery")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Add robots.txt endpoint for SEO and security
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    """Serve robots.txt for search engine crawlers and security"""
+    try:
+        with open("app/static/robots.txt", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return """User-agent: *
+Allow: /
+Allow: /static/
+Allow: /session/
+Disallow: /api/
+Disallow: /docs
+Disallow: /redoc
+Crawl-delay: 1"""
+
+# Add security.txt endpoint for responsible disclosure
+@app.get("/.well-known/security.txt", response_class=PlainTextResponse)
+async def security_txt():
+    """Serve security.txt for responsible vulnerability disclosure"""
+    try:
+        with open("app/static/.well-known/security.txt", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return """Contact: security@pixorasoft.ru
+Expires: 2025-12-31T23:59:59.000Z
+Canonical: https://facepass.pixorasoft.ru/.well-known/security.txt"""
+
+# Add sitemap.xml endpoint for SEO
+@app.get("/sitemap.xml", response_class=PlainTextResponse)
+async def sitemap_xml():
+    """Serve sitemap.xml for search engines"""
+    try:
+        with open("app/static/sitemap.xml", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://facepass.pixorasoft.ru/</loc>
+        <changefreq>weekly</changefreq>
+        <priority>1.0</priority>
+    </url>
+</urlset>"""
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")

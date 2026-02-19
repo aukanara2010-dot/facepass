@@ -223,7 +223,7 @@ async def search_faces(
             FROM face_embeddings
             WHERE event_id = :event_id
                 AND (1 - (embedding <=> :query_embedding)) >= :threshold
-            ORDER BY embedding <=> :query_embedding ASC
+            ORDER BY similarity DESC
             LIMIT :limit
         """)
         
@@ -581,7 +581,7 @@ async def search_faces_in_session(
             FROM face_embeddings fe
             WHERE fe.session_id = :session_id
                 AND (1 - (fe.embedding <=> :query_embedding)) >= :threshold
-            ORDER BY fe.embedding <=> :query_embedding ASC
+            ORDER BY similarity DESC
             LIMIT :limit
         """)
         
@@ -840,6 +840,285 @@ async def index_session_photos(
     except Exception as e:
         logger.error(f"Indexing failed for session {session_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+@router.post("/force-reindex-session/{session_id}")
+async def force_reindex_session_from_cloud(
+    session_id: str,
+    vector_db: Session = Depends(get_vector_db_session)
+):
+    """
+    Принудительная переиндексация сессии из облачной базы данных.
+
+    Этот эндпоинт:
+    1. Получает все photo_id из облачной базы данных
+    2. Проверяет их наличие в локальной face_embeddings
+    3. Для отсутствующих фото скачивает изображения и создает эмбеддинги
+    4. Выводит подробные логи процесса
+
+    Args:
+        session_id: UUID фотосессии для переиндексации
+
+    Returns:
+        Детальный отчет о процессе переиндексации
+    """
+    import time
+    import logging
+    import requests
+    from sqlalchemy import text
+    from services.face_recognition import get_face_recognition_service
+    from core.database import get_pixora_db
+    from models.photo_session import PhotoSession
+    from models.face import FaceEmbedding
+
+    logger = logging.getLogger(__name__)
+    start_time = time.time()
+
+    logger.info(f"=== ПРИНУДИТЕЛЬНАЯ ПЕРЕИНДЕКСАЦИЯ СЕССИИ {session_id} ===")
+    print(f"=== ПРИНУДИТЕЛЬНАЯ ПЕРЕИНДЕКСАЦИЯ СЕССИИ {session_id} ===")
+
+    # Валидация сессии
+    pixora_db = None
+    try:
+        pixora_db = next(get_pixora_db())
+        session = pixora_db.query(PhotoSession).filter(PhotoSession.id == session_id).first()
+        if not session:
+            logger.error(f"Сессия не найдена: {session_id}")
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if not session.is_facepass_active():
+            logger.error(f"FacePass не активен для сессии: {session_id}")
+            raise HTTPException(status_code=403, detail="FacePass is not enabled for this session")
+
+        logger.info(f"Сессия валидирована: {session.name}")
+        print(f"Сессия валидирована: {session.name}")
+
+        # Получаем все фото из облачной базы
+        photos_query = text("""
+            SELECT id, file_name, preview_path, file_path, created_at
+            FROM public.photos
+            WHERE photo_session_id = :session_id
+            ORDER BY created_at ASC
+        """)
+
+        photos_result = pixora_db.execute(photos_query, {"session_id": session_id})
+        cloud_photos = []
+
+        for photo_row in photos_result:
+            file_name = photo_row[1]
+            # Извлекаем photo_id из имени файла (убираем расширение)
+            photo_id = file_name.split('.')[0] if '.' in file_name else file_name
+
+            cloud_photos.append({
+                "id": photo_row[0],
+                "photo_id": photo_id,
+                "file_name": file_name,
+                "preview_path": photo_row[2],
+                "file_path": photo_row[3],
+                "created_at": photo_row[4]
+            })
+
+        total_photos = len(cloud_photos)
+        logger.info(f"Найдено {total_photos} фото в облачной базе")
+        print(f"Найдено {total_photos} фото в облачной базе")
+
+        if total_photos == 0:
+            return {
+                "success": True,
+                "message": "Нет фото для индексации",
+                "session_id": session_id,
+                "session_name": session.name,
+                "total_photos": 0,
+                "processed_photos": 0,
+                "successful_photos": 0,
+                "skipped_photos": 0,
+                "failed_photos": 0
+            }
+
+    finally:
+        if pixora_db:
+            pixora_db.close()
+
+    # Проверяем какие фото уже проиндексированы локально
+    try:
+        existing_embeddings_query = text("""
+            SELECT photo_id FROM face_embeddings
+            WHERE session_id = :session_id
+        """)
+
+        existing_result = vector_db.execute(
+            existing_embeddings_query,
+            {"session_id": session_id}
+        )
+
+        existing_photo_ids = set(row[0] for row in existing_result)
+        logger.info(f"Уже проиндексировано локально: {len(existing_photo_ids)} фото")
+        print(f"Уже проиндексировано локально: {len(existing_photo_ids)} фото")
+
+        # Определяем какие фото нужно обработать
+        photos_to_process = []
+        for photo in cloud_photos:
+            if photo["photo_id"] not in existing_photo_ids:
+                photos_to_process.append(photo)
+
+        photos_to_process_count = len(photos_to_process)
+        logger.info(f"Нужно обработать: {photos_to_process_count} новых фото")
+        print(f"Нужно обработать: {photos_to_process_count} новых фото")
+
+        if photos_to_process_count == 0:
+            return {
+                "success": True,
+                "message": "Все фото уже проиндексированы",
+                "session_id": session_id,
+                "session_name": session.name,
+                "total_photos": total_photos,
+                "processed_photos": 0,
+                "successful_photos": 0,
+                "skipped_photos": total_photos,
+                "failed_photos": 0,
+                "processing_time_ms": (time.time() - start_time) * 1000
+            }
+
+    except Exception as e:
+        logger.error(f"Ошибка при проверке существующих эмбеддингов: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Инициализируем сервис распознавания лиц
+    try:
+        face_service = get_face_recognition_service()
+        logger.info("Сервис распознавания лиц инициализирован")
+    except Exception as e:
+        logger.error(f"Ошибка инициализации сервиса распознавания: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Face recognition service error: {str(e)}")
+
+    # Обрабатываем каждое фото
+    processed_count = 0
+    successful_count = 0
+    failed_count = 0
+    error_messages = []
+
+    for i, photo in enumerate(photos_to_process, 1):
+        photo_id = photo["photo_id"]
+        file_name = photo["file_name"]
+        preview_path = photo["preview_path"]
+
+        logger.info(f"Обработка фото {i} из {photos_to_process_count}: {file_name}")
+        print(f"Обработка фото {i} из {photos_to_process_count}: {file_name}")
+
+        processed_count += 1
+
+        try:
+            # Формируем URL для скачивания фото
+            # Используем preview_path из базы данных
+            if not preview_path:
+                error_msg = f"Отсутствует preview_path для фото {file_name}"
+                logger.warning(error_msg)
+                error_messages.append(error_msg)
+                failed_count += 1
+                continue
+
+            # Если preview_path относительный, добавляем базовый URL
+            if preview_path.startswith('http'):
+                photo_url = preview_path
+            else:
+                # Предполагаем, что это S3 путь
+                from core.config import get_settings
+                settings = get_settings()
+                photo_url = f"https://{settings.S3_BUCKET_NAME}.s3.amazonaws.com/{preview_path}"
+
+            logger.info(f"Скачиваем фото: {photo_url}")
+
+            # Скачиваем фото
+            response = requests.get(photo_url, timeout=30)
+            response.raise_for_status()
+
+            image_data = response.content
+            logger.info(f"Фото скачано: {len(image_data)} байт")
+
+            # Извлекаем эмбеддинг
+            embedding, confidence = face_service.extract_single_embedding(image_data)
+
+            if embedding is None:
+                error_msg = f"Лицо не обнаружено в фото {file_name}"
+                logger.warning(error_msg)
+                error_messages.append(error_msg)
+                failed_count += 1
+                continue
+
+            # Нормализуем эмбеддинг
+            import numpy as np
+            embedding_norm = np.linalg.norm(embedding)
+            if embedding_norm > 0:
+                embedding = embedding / embedding_norm
+
+            # Сохраняем в векторную базу
+            face_embedding = FaceEmbedding(
+                session_id=session_id,
+                photo_id=photo_id,
+                embedding=embedding.tolist(),
+                confidence=confidence,
+                created_at=photo["created_at"]
+            )
+
+            vector_db.add(face_embedding)
+            vector_db.commit()
+
+            successful_count += 1
+            logger.info(f"✅ Фото {file_name} успешно обработано (confidence: {confidence:.3f})")
+            print(f"✅ Фото {file_name} успешно обработано (confidence: {confidence:.3f})")
+
+        except requests.RequestException as e:
+            error_msg = f"Ошибка скачивания {file_name}: {str(e)}"
+            logger.error(error_msg)
+            error_messages.append(error_msg)
+            failed_count += 1
+
+        except Exception as e:
+            error_msg = f"Ошибка обработки {file_name}: {str(e)}"
+            logger.error(error_msg)
+            error_messages.append(error_msg)
+            failed_count += 1
+
+            # Откатываем транзакцию при ошибке
+            try:
+                vector_db.rollback()
+            except:
+                pass
+
+    # Финальная статистика
+    processing_time_ms = (time.time() - start_time) * 1000
+    skipped_count = len(existing_photo_ids)
+
+    logger.info(f"=== ПЕРЕИНДЕКСАЦИЯ ЗАВЕРШЕНА ===")
+    logger.info(f"Всего фото в облаке: {total_photos}")
+    logger.info(f"Уже проиндексировано: {skipped_count}")
+    logger.info(f"Обработано новых: {processed_count}")
+    logger.info(f"Успешно: {successful_count}")
+    logger.info(f"Ошибок: {failed_count}")
+    logger.info(f"Время обработки: {processing_time_ms:.2f}ms")
+
+    print(f"=== ПЕРЕИНДЕКСАЦИЯ ЗАВЕРШЕНА ===")
+    print(f"Всего фото в облаке: {total_photos}")
+    print(f"Уже проиндексировано: {skipped_count}")
+    print(f"Обработано новых: {processed_count}")
+    print(f"Успешно: {successful_count}")
+    print(f"Ошибок: {failed_count}")
+    print(f"Время обработки: {processing_time_ms:.2f}ms")
+
+    return {
+        "success": True,
+        "message": f"Переиндексация завершена: {successful_count}/{processed_count} новых фото",
+        "session_id": session_id,
+        "session_name": session.name,
+        "total_photos": total_photos,
+        "processed_photos": processed_count,
+        "successful_photos": successful_count,
+        "skipped_photos": skipped_count,
+        "failed_photos": failed_count,
+        "processing_time_ms": processing_time_ms,
+        "errors": error_messages[:10] if error_messages else [],
+        "final_embedding_count": skipped_count + successful_count
+    }
+
+
 
 
 @router.get("/session-index-status/{session_id}", response_model=dict)

@@ -39,6 +39,7 @@ class FacePassSession {
         // Elements
         this.sessionTitle = document.getElementById('session-title');
         this.fileInput = document.getElementById('file-input');
+        this.fallbackInput = document.getElementById('fallback-input');
         this.photosGrid = document.getElementById('photos-grid');
         this.resultsCount = document.getElementById('results-count');
         this.selectedCount = document.getElementById('selected-count');
@@ -87,6 +88,9 @@ class FacePassSession {
         
         // File input
         this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
+        if (this.fallbackInput) {
+            this.fallbackInput.addEventListener('change', (e) => this.handleFileUpload(e));
+        }
         
         // Camera modal
         this.capturePhoto.addEventListener('click', () => this.capturePhotoFromCamera());
@@ -220,29 +224,89 @@ class FacePassSession {
         }
     }
 
-    // Camera functionality
+    // Camera functionality with Android compatibility
     async openCamera() {
         if (!this.privacyAgreement || !this.privacyAgreement.checked) {
             this.showToast('Пожалуйста, примите условия обработки персональных данных', 'warning');
             return;
         }
         
+        // Detect Android Chrome for special handling
+        const isAndroidChrome = /Android.*Chrome/.test(navigator.userAgent);
+        let cameraTimeout;
+        
+        if (isAndroidChrome) {
+            // Set timeout for Android Chrome camera activation
+            cameraTimeout = setTimeout(() => {
+                this.showAndroidCameraFallback();
+            }, 2000);
+        }
+        
         try {
-            this.stream = await navigator.mediaDevices.getUserMedia({
+            // Enhanced constraints for better Android compatibility
+            const constraints = {
                 video: {
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                    facingMode: 'user'
-                }
-            });
+                    width: { ideal: 640, max: 1280 },
+                    height: { ideal: 480, max: 720 },
+                    facingMode: "user", // Explicitly request front camera
+                    aspectRatio: { ideal: 1.33 }
+                },
+                audio: false
+            };
+            
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            // Clear timeout if camera opened successfully
+            if (cameraTimeout) {
+                clearTimeout(cameraTimeout);
+            }
             
             this.cameraVideo.srcObject = this.stream;
             this.showModal(this.cameraModal);
             
         } catch (error) {
             console.error('Camera error:', error);
-            this.showToast('Не удалось получить доступ к камере. Проверьте разрешения.', 'error');
+            
+            // Clear timeout
+            if (cameraTimeout) {
+                clearTimeout(cameraTimeout);
+            }
+            
+            // Handle different error types
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                this.showCameraPermissionError();
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                this.showToast('Камера не найдена на устройстве', 'error');
+                this.showCameraFallback();
+            } else if (error.name === 'NotSupportedError' || error.name === 'NotReadableError') {
+                this.showToast('Камера недоступна или используется другим приложением', 'error');
+                this.showCameraFallback();
+            } else {
+                this.showToast('Не удалось получить доступ к камере', 'error');
+                this.showCameraFallback();
+            }
         }
+    }
+
+    showAndroidCameraFallback() {
+        this.showToast('Нажмите "Загрузить фото" и выберите "Камера"', 'info');
+        // Highlight the upload button
+        this.uploadBtn.classList.add('animate-pulse');
+        setTimeout(() => {
+            this.uploadBtn.classList.remove('animate-pulse');
+        }, 3000);
+    }
+
+    showCameraPermissionError() {
+        this.showToast('Разрешите доступ к камере в настройках браузера', 'warning');
+        this.showCameraFallback();
+    }
+
+    showCameraFallback() {
+        // Automatically show file input as fallback
+        setTimeout(() => {
+            this.openFileDialog();
+        }, 1000);
     }
 
     closeCamera() {
@@ -270,11 +334,19 @@ class FacePassSession {
         }, 'image/jpeg', 0.95);
     }
 
-    // File upload functionality
+    // File upload functionality with Android optimization
     openFileDialog() {
         if (!this.privacyAgreement || !this.privacyAgreement.checked) {
             this.showToast('Пожалуйста, примите условия обработки персональных данных', 'warning');
             return;
+        }
+        
+        // For Android devices, ensure proper file input attributes
+        const isAndroid = /Android/.test(navigator.userAgent);
+        if (isAndroid) {
+            // Ensure capture attribute is set for Android
+            this.fileInput.setAttribute('capture', 'user');
+            this.fileInput.setAttribute('accept', 'image/*');
         }
         
         this.fileInput.click();
@@ -283,7 +355,21 @@ class FacePassSession {
     handleFileUpload(event) {
         const file = event.target.files[0];
         if (file && file.type.startsWith('image/')) {
-            this.processPhoto(file, file.name);
+            // Show mobile loading indicator immediately
+            this.showMobileLoadingIndicator('Обработка изображения...');
+            
+            // Validate file size (max 10MB for mobile compatibility)
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                this.hideMobileLoadingIndicator();
+                this.showToast('Файл слишком большой. Максимальный размер: 10MB', 'error');
+                return;
+            }
+            
+            // Add small delay for Android processing
+            setTimeout(() => {
+                this.processPhoto(file, file.name);
+            }, 100);
         } else {
             this.showToast('Пожалуйста, выберите изображение', 'error');
         }
@@ -291,8 +377,39 @@ class FacePassSession {
         event.target.value = '';
     }
 
+    showMobileLoadingIndicator(message = 'Загрузка...') {
+        // Remove existing indicator
+        this.hideMobileLoadingIndicator();
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'mobile-loading-overlay';
+        overlay.className = 'mobile-loading-overlay';
+        
+        overlay.innerHTML = `
+            <div class="mobile-loading-content">
+                <div class="mobile-spinner"></div>
+                <p class="text-gray-700 font-medium">${message}</p>
+                <p class="text-sm text-gray-500 mt-2">Пожалуйста, подождите...</p>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        document.body.style.overflow = 'hidden';
+    }
+
+    hideMobileLoadingIndicator() {
+        const overlay = document.getElementById('mobile-loading-overlay');
+        if (overlay) {
+            overlay.remove();
+            document.body.style.overflow = '';
+        }
+    }
+
     // Photo processing and search
     async processPhoto(imageBlob, fileName) {
+        // Hide mobile loading indicator if it was shown
+        this.hideMobileLoadingIndicator();
+        
         // Hide hero section and show loading
         this.hideSection(this.heroSection);
         this.hideSection(this.howItWorks);
@@ -332,6 +449,7 @@ class FacePassSession {
         } catch (error) {
             console.error('Search error:', error);
             this.hideSection(this.searchLoading);
+            this.hideMobileLoadingIndicator(); // Ensure loading is hidden on error
             this.showToast('Ошибка при поиске фотографий. Попробуйте еще раз.', 'error');
             this.resetToHero();
         }
@@ -382,21 +500,26 @@ class FacePassSession {
         }
         
         card.innerHTML = `
-            <div class="relative">
-                <img src="${previewUrl}" alt="Фото ${index + 1}" class="w-full h-48 object-cover">
-                <div class="absolute top-2 right-2">
-                    <span class="similarity-badge text-white px-2 py-1 rounded-full text-xs font-semibold">
-                        ${similarityPercent}% совпадение
+            <div class="photo-container">
+                <img src="${previewUrl}" alt="Фото ${index + 1}" class="photo-image" loading="lazy">
+                <div class="absolute top-3 right-3">
+                    <span class="similarity-badge text-white px-3 py-1 rounded-full text-sm font-semibold">
+                        ${similarityPercent}%
                     </span>
                 </div>
-                <div class="absolute top-2 left-2">
-                    <input type="checkbox" class="photo-checkbox w-5 h-5 text-blue-600 rounded" data-photo-id="${photo.id}">
+                <div class="absolute top-3 left-3">
+                    <div class="photo-checkbox-container">
+                        <input type="checkbox" class="photo-checkbox w-5 h-5 text-blue-600 rounded" data-photo-id="${photo.id}">
+                    </div>
                 </div>
             </div>
             <div class="p-4">
-                <h3 class="font-semibold text-gray-900 mb-2">Фото ${index + 1}</h3>
-                <p class="text-sm text-gray-600 mb-3">Сходство: ${similarityPercent}%</p>
-                <button class="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors view-photo-btn">
+                <div class="flex justify-between items-start mb-3">
+                    <h3 class="font-semibold text-gray-900">Фото ${index + 1}</h3>
+                    <span class="text-sm font-medium text-green-600">${similarityPercent}% совпадение</span>
+                </div>
+                <button class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-colors view-photo-btn font-medium">
+                    <i class="fas fa-eye mr-2"></i>
                     Просмотреть
                 </button>
             </div>
@@ -409,8 +532,10 @@ class FacePassSession {
         checkbox.addEventListener('change', (e) => {
             if (e.target.checked) {
                 this.selectedPhotos.add(photo.id);
+                card.classList.add('ring-2', 'ring-blue-500');
             } else {
                 this.selectedPhotos.delete(photo.id);
+                card.classList.remove('ring-2', 'ring-blue-500');
             }
             this.updateSelectedCount();
         });
@@ -473,10 +598,18 @@ class FacePassSession {
 
     selectAllPhotos() {
         const checkboxes = document.querySelectorAll('.photo-checkbox');
-        checkboxes.forEach(checkbox => {
+        const cards = document.querySelectorAll('.photo-card');
+        
+        checkboxes.forEach((checkbox, index) => {
             checkbox.checked = true;
             this.selectedPhotos.add(checkbox.dataset.photoId);
+            
+            // Add visual selection state
+            if (cards[index]) {
+                cards[index].classList.add('ring-2', 'ring-blue-500', 'selected');
+            }
         });
+        
         this.updateSelectedCount();
     }
 
@@ -573,7 +706,15 @@ class FacePassSession {
 
     showToast(message, type = 'info') {
         const toast = document.createElement('div');
-        toast.className = `bg-white border-l-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full max-w-sm`;
+        
+        // Check if mobile device for special positioning
+        const isMobile = window.innerWidth <= 768;
+        
+        if (isMobile) {
+            toast.className = `security-toast bg-white border-l-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+        } else {
+            toast.className = `bg-white border-l-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full max-w-sm`;
+        }
         
         const colors = {
             success: 'border-green-500 text-green-700',

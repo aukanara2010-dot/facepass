@@ -113,8 +113,211 @@
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
         }
         
+        .photo-card .photo-container {
+            position: relative;
+            width: 100%;
+            background: #f8fafc;
+        }
+        
+        .photo-card .photo-image {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: contain;
+            max-height: 300px;
+        }
+        
         .similarity-badge {
             background: linear-gradient(45deg, #10b981, #059669);
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* File input hiding - cross-browser compatible */
+        .file-input-hidden {
+            position: absolute !important;
+            left: -9999px !important;
+            top: -9999px !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            z-index: -1 !important;
+        }
+        
+        .photo-checkbox-container {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(4px);
+            border-radius: 6px;
+            padding: 4px;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .photo-card {
+                margin-bottom: 1rem;
+            }
+            
+            .photo-card .photo-image {
+                max-height: 250px;
+            }
+            
+            .similarity-badge {
+                font-size: 0.75rem;
+                padding: 4px 8px;
+            }
+            
+            #photos-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                padding: 0 1rem;
+            }
+            
+            .results-section {
+                padding: 1rem 0;
+            }
+        }
+        
+        @media (min-width: 769px) and (max-width: 1024px) {
+            #photos-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1025px) {
+            #photos-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        @media (min-width: 1280px) {
+            #photos-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        /* Loading states */
+        .photo-image {
+            transition: opacity 0.3s ease;
+        }
+        
+        .photo-image[loading] {
+            opacity: 0.7;
+        }
+        
+        /* Selection states */
+        .photo-card.selected {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+        }
+        
+        /* Improved badge positioning */
+        .similarity-badge {
+            z-index: 10;
+        }
+        
+        .photo-checkbox-container {
+            z-index: 10;
+        }
+        
+        /* Android Mobile Layout Fixes */
+        @media (max-width: 768px) {
+            /* Force vertical layout for action buttons on mobile */
+            .action-buttons-container {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 1rem !important;
+                width: 100% !important;
+            }
+            
+            .action-buttons-container button {
+                width: 100% !important;
+                min-width: unset !important;
+                margin: 0 !important;
+            }
+            
+            /* Ensure proper spacing for privacy agreement */
+            .privacy-agreement-container {
+                margin-top: 2rem !important;
+                padding-top: 1rem !important;
+                border-top: 1px solid #e5e7eb;
+            }
+            
+            /* Hide file inputs completely on mobile */
+            input[type="file"] {
+                position: absolute !important;
+                left: -9999px !important;
+                top: -9999px !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+                width: 0 !important;
+                height: 0 !important;
+                overflow: hidden !important;
+            }
+            
+            /* Loading indicator styles */
+            .mobile-loading-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+                backdrop-filter: blur(4px);
+            }
+            
+            .mobile-loading-content {
+                background: white;
+                padding: 2rem;
+                border-radius: 1rem;
+                text-align: center;
+                max-width: 280px;
+                margin: 1rem;
+            }
+            
+            .mobile-spinner {
+                width: 40px;
+                height: 40px;
+                border: 4px solid #f3f4f6;
+                border-top: 4px solid #3b82f6;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin: 0 auto 1rem;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            /* Security toast positioning */
+            .security-toast {
+                z-index: 10000 !important;
+                position: fixed !important;
+                top: 1rem !important;
+                left: 1rem !important;
+                right: 1rem !important;
+                max-width: calc(100vw - 2rem) !important;
+            }
+        }
+        
+        /* Tablet adjustments */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .action-buttons-container {
+                flex-direction: column !important;
+                align-items: center !important;
+                gap: 1rem !important;
+            }
+            
+            .action-buttons-container button {
+                width: 100% !important;
+                max-width: 300px !important;
+            }
         }
     </style>
 </head>
@@ -168,7 +371,7 @@
                     </p>
                     
                     <!-- Action Buttons -->
-                    <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <div class="action-buttons-container flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                         <button id="camera-btn" class="btn-camera text-white px-8 py-4 rounded-2xl font-semibold text-lg flex items-center justify-center space-x-3 transition-all duration-300 min-w-[200px] opacity-50 cursor-not-allowed" disabled>
                             <i class="fas fa-camera text-xl"></i>
                             <span>Снять с камеры</span>
@@ -181,7 +384,7 @@
                     </div>
                     
                     <!-- Privacy Agreement -->
-                    <div class="flex items-start space-x-3 mt-6 max-w-2xl">
+                    <div class="privacy-agreement-container flex items-start space-x-3 mt-6 max-w-2xl">
                         <input type="checkbox" id="privacy-agreement" class="mt-1 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2">
                         <label for="privacy-agreement" class="text-sm text-gray-600 leading-relaxed">
                             Я принимаю 
@@ -191,8 +394,10 @@
                         </label>
                     </div>
                     
-                    <!-- Hidden File Input -->
-                    <input type="file" id="file-input" accept="image/*" class="hidden">
+                    <!-- Hidden File Inputs (completely hidden on mobile) -->
+                    <input type="file" id="file-input" accept="image/*" capture="user" class="file-input-hidden">
+                    <!-- Fallback input for Android compatibility -->
+                    <input type="file" id="fallback-input" accept="image/*" capture="environment" class="file-input-hidden">
                 </div>
                 
                 <!-- Right Column - Illustration -->
@@ -260,7 +465,7 @@
             </div>
             
             <!-- Photos Grid -->
-            <div id="photos-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
+            <div id="photos-grid" class="grid gap-6 mb-12">
                 <!-- Photos will be inserted here -->
             </div>
             
