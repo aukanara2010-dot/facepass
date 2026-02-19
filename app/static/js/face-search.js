@@ -174,8 +174,12 @@ class FacePassSession {
     updateSessionTitle() {
         if (this.sessionData && this.sessionData.session_name) {
             this.sessionTitle.innerHTML = `
-                Найдите себя на фотосессии<br>
+                Найдите себя на 
                 <span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    фотосессии по лицу
+                </span>
+                <br><br>
+                <span class="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-700">
                     "${this.sessionData.session_name}"
                 </span>
             `;
