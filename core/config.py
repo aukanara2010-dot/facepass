@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     
     # Face Recognition Settings (Default values provided)
     FACE_DETECTION_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0)
-    FACE_SIMILARITY_THRESHOLD: float = Field(default=0.7, ge=0.0, le=1.0)
+    FACE_SIMILARITY_THRESHOLD: float = Field(default=0.5, ge=0.0, le=1.0)
     EMBEDDING_DIMENSION: int = 512
     
     model_config = SettingsConfigDict(

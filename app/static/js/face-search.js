@@ -304,7 +304,7 @@ class FacePassSession {
             const formData = new FormData();
             formData.append('file', imageBlob, fileName);
             formData.append('session_id', this.sessionId);
-            formData.append('threshold', '0.6');
+            formData.append('threshold', '0.5');
             formData.append('limit', '50');
             
             // Make search request

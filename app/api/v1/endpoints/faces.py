@@ -272,7 +272,7 @@ async def search_faces(
 async def search_faces_in_session(
     session_id: str = Form(..., description="Photo session UUID to search within"),
     file: UploadFile = File(..., description="Selfie photo from client"),
-    threshold: float = Form(0.7, description="Similarity threshold (0.0-1.0)"),
+    threshold: float = Form(None, description="Similarity threshold (0.0-1.0), uses config default if not provided"),
     limit: int = Form(50, description="Maximum number of results"),
     db: Session = Depends(get_db),
     vector_db: Session = Depends(get_vector_db_session)
@@ -308,11 +308,17 @@ async def search_faces_in_session(
     from services.face_recognition import get_face_recognition_service
     from core.database import get_pixora_db
     from models.photo_session import PhotoSession
+    from core.config import get_settings
     
     logger = logging.getLogger(__name__)
     start_time = time.time()
+    settings = get_settings()
     
-    logger.info(f"Starting face search for session {session_id}")
+    # Use config default if threshold not provided
+    if threshold is None:
+        threshold = settings.FACE_SIMILARITY_THRESHOLD
+    
+    logger.info(f"Starting face search for session {session_id} with threshold {threshold}")
     
     # Validate session exists and FacePass is enabled
     pixora_db = None
@@ -552,8 +558,17 @@ async def search_faces_in_session(
         
         if max_similarities:
             max_similarity = max(max_similarities)
-            logger.info(f"SIMILARITY DEBUG - Max similarity found: {max_similarity:.4f}, Top 5 similarities: {sorted(max_similarities, reverse=True)[:5]}")
-            print(f"SIMILARITY DEBUG - Session {session_id}: Max similarity = {max_similarity:.4f}, Threshold = {threshold}")
+            above_threshold_count = sum(1 for s in max_similarities if s >= threshold)
+            near_threshold_count = sum(1 for s in max_similarities if threshold - 0.1 <= s < threshold)
+            
+            logger.info(f"SIMILARITY ANALYSIS - Session {session_id}:")
+            logger.info(f"  Max similarity: {max_similarity:.4f}")
+            logger.info(f"  Threshold: {threshold:.4f}")
+            logger.info(f"  Above threshold: {above_threshold_count}/{len(max_similarities)}")
+            logger.info(f"  Near threshold (±0.1): {near_threshold_count}")
+            logger.info(f"  Top 5 similarities: {sorted(max_similarities, reverse=True)[:5]}")
+            
+            print(f"SIMILARITY DEBUG - Session {session_id}: Max={max_similarity:.4f}, Threshold={threshold:.4f}, Above={above_threshold_count}, Near={near_threshold_count}")
         else:
             logger.info(f"SIMILARITY DEBUG - No embeddings found for session {session_id}")
             print(f"SIMILARITY DEBUG - Session {session_id}: No embeddings found")
