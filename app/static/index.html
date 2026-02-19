@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FacePass - Найдите себя на фотосессии по лицу</title>
-    <meta name="description" content="Сделайте селфи, и наш AI покажет все ваши фотографии с фотосессии. Быстро, точно, удобно.">
+    <title>PIXORA - Найдите свои профессиональные фотографии</title>
+    <meta name="description" content="Загрузите селфи, и система мгновенного поиска покажет все ваши кадры из фотосессии. Быстро, точно, удобно.">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -45,50 +45,224 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        .gradient-bg {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        /* Pixora Light Theme - Design System v1.0 */
+        :root {
+            --bg-primary: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+            --bg-secondary: #f8fafc;
+            --bg-glass: rgba(255, 255, 255, 0.7);
+            --bg-glass-hover: rgba(255, 255, 255, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.2);
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-secondary: #4f46e5;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-error: #ef4444;
+            --accent-pink: #ec4899;
+            --glow-primary: rgba(99, 102, 241, 0.1);
+            --glow-secondary: rgba(79, 70, 229, 0.1);
+            --indigo-primary: #6366f1;
+            --input-bg: #f8fafc;
+            --input-border: #e2e8f0;
+            --badge-success-bg: #dcfce7;
+            --badge-success-text: #166534;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background - Light Theme */
+        .pixora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
         }
         
-        .hero-gradient {
-            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 50%, #e2e8f0 100%);
+        .pixora-bg::before {
+            content: '';
+            position: absolute;
+            top: 20%;
+            left: 10%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(147, 197, 253, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: float-glow 8s ease-in-out infinite;
         }
         
+        .pixora-bg::after {
+            content: '';
+            position: absolute;
+            bottom: 20%;
+            right: 10%;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(196, 181, 253, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: float-glow 10s ease-in-out infinite reverse;
+        }
+
+        @keyframes float-glow {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
+            50% { transform: translate(-20px, -30px) scale(1.1); opacity: 0.5; }
+        }
+
+        /* Glassmorphism Components - Light Theme */
+        .glass-card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .glass-card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .glass-card-hover:hover {
+            background: var(--bg-glass-hover);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        /* Header Styles - Light Theme */
+        .pixora-header {
+            background: rgba(248, 250, 252, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-glass);
+        }
+        
+        .pixora-logo {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 800;
+        }
+
+        /* Typography - Light Theme */
+        .text-gradient {
+            background: linear-gradient(to right, #6366f1, #ec4899, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .text-gradient-simple {
+            background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Button Styles - Light Theme */
+        .btn-pixora {
+            background: linear-gradient(to right, #6366f1, #4f46e5);
+            border: none;
+            border-radius: 16px;
+            color: white;
+            font-weight: 600;
+            padding: 16px 32px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            height: 56px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+        
+        .btn-pixora:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--glow-primary);
+        }
+        
+        .btn-pixora:active {
+            transform: scale(0.95);
+        }
+
         .btn-camera {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
-        }
-        
-        .btn-upload {
-            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-            box-shadow: 0 10px 25px rgba(139, 92, 246, 0.3);
+            background: linear-gradient(to right, var(--accent-success), #059669);
         }
         
         .btn-camera:hover {
-            box-shadow: 0 15px 35px rgba(16, 185, 129, 0.4);
-            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+        
+        .btn-upload {
+            background: linear-gradient(to right, var(--accent-secondary), #7c3aed);
         }
         
         .btn-upload:hover {
-            box-shadow: 0 15px 35px rgba(139, 92, 246, 0.4);
-            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--glow-secondary);
         }
-        
+
+        /* Step Cards */
         .step-card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
             transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
         
         .step-card:hover {
+            background: var(--bg-glass-hover);
             transform: translateY(-5px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         }
-        
+
+        /* FAQ Items */
         .faq-item {
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            overflow: hidden;
             transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
-        
+
+        .faq-toggle:hover {
+            background: var(--bg-glass-hover);
+        }
+
+        /* Info Box */
+        .info-box {
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Selfie Placeholder */
         .selfie-placeholder {
-            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-            border: 3px dashed #cbd5e1;
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border: 3px dashed var(--border-glass);
+            border-radius: 24px;
         }
         
         .animate-float {
@@ -101,13 +275,41 @@
         }
         
         .animate-pulse-slow {
-            animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            animation: pulse-slow 4s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+            .pixora-bg::before,
+            .pixora-bg::after {
+                width: 200px;
+                height: 200px;
+            }
+            
+            .glass-card {
+                border-radius: 16px;
+                margin: 0 16px;
+            }
+            
+            .btn-pixora {
+                height: 48px;
+                padding: 12px 24px;
+                font-size: 15px;
+            }
         }
     </style>
 </head>
-<body class="font-sans bg-gradient-bg min-h-screen">
+<body class="font-sans min-h-screen">
+    <!-- Animated Background -->
+    <div class="pixora-bg"></div>
+    
     <!-- Header -->
-    <header class="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+    <header class="pixora-header sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <!-- Logo -->
@@ -115,17 +317,17 @@
                     <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
                         <i class="fas fa-camera text-white text-lg"></i>
                     </div>
-                    <span class="text-xl font-bold text-gray-900">PIXORASOFT</span>
+                    <span class="pixora-logo text-xl font-bold">PIXORA</span>
                 </div>
                 
                 <!-- Navigation -->
                 <div class="flex items-center space-x-6">
                     <!-- Language Selector -->
-                    <div class="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
-                        <button class="px-3 py-1 text-sm font-medium text-white bg-blue-500 rounded-md transition-colors">
+                    <div class="flex items-center space-x-2 glass-card rounded-lg p-1">
+                        <button class="px-3 py-1 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-600 rounded-md transition-colors">
                             RU
                         </button>
-                        <button class="px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+                        <button class="px-3 py-1 text-sm font-medium text-pixora-secondary hover:text-pixora-primary transition-colors">
                             EN
                         </button>
                     </div>
@@ -135,36 +337,37 @@
     </header>
 
     <!-- Hero Section -->
-    <section class="hero-gradient py-20 lg:py-32">
+    <section class="py-20 lg:py-32">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="grid lg:grid-cols-2 gap-12 items-center">
                 <!-- Left Column - Content -->
                 <div class="text-center lg:text-left">
                     <!-- Main Heading -->
-                    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
-                        Найдите себя на 
-                        <span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                            фотосессии по лицу
+                    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-pixora-primary leading-tight mb-6">
+                        Найдите свои 
+                        <span class="text-gradient">
+                            профессиональные фотографии
                         </span>
+                        за считанные секунды
                     </h1>
                     
                     <!-- Subtitle -->
-                    <p class="text-xl text-gray-600 mb-10 max-w-2xl">
-                        Сделайте селфи, и наш AI покажет все ваши фотографии. 
+                    <p class="text-xl text-pixora-secondary mb-10 max-w-2xl">
+                        Загрузите селфи, и система мгновенного поиска покажет все ваши кадры из фотосессии. 
                         Быстро, точно и удобно.
                     </p>
                     
                     <!-- Info Message -->
-                    <div class="bg-blue-50 border border-blue-200 rounded-2xl p-6 max-w-2xl mx-auto">
+                    <div class="info-box max-w-2xl mx-auto">
                         <div class="flex items-center space-x-3 mb-3">
-                            <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                            <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                                 <i class="fas fa-info text-white text-sm"></i>
                             </div>
-                            <h3 class="text-lg font-semibold text-blue-900">Как получить доступ к поиску?</h3>
+                            <h3 class="text-lg font-semibold text-pixora-primary">Как получить доступ к поиску?</h3>
                         </div>
-                        <p class="text-blue-800 leading-relaxed">
+                        <p class="text-pixora-secondary leading-relaxed">
                             Для поиска ваших фотографий обратитесь к фотографу, который проводил съемку. 
-                            Он предоставит вам персональную ссылку для доступа к системе поиска по лицу.
+                            Он предоставит вам персональную ссылку для доступа к системе поиска по селфи.
                         </p>
                     </div>
                 </div>
@@ -173,19 +376,19 @@
                 <div class="flex justify-center lg:justify-end">
                     <div class="relative">
                         <!-- Selfie Placeholder -->
-                        <div class="selfie-placeholder w-80 h-80 rounded-3xl flex items-center justify-center animate-float">
+                        <div class="selfie-placeholder w-80 h-80 flex items-center justify-center animate-float">
                             <div class="text-center">
-                                <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                                    <i class="fas fa-user text-3xl text-gray-400"></i>
+                                <div class="w-20 h-20 glass-card rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                                    <i class="fas fa-user text-3xl text-pixora-secondary"></i>
                                 </div>
-                                <p class="text-gray-500 font-medium">Ваше селфи здесь</p>
+                                <p class="text-pixora-secondary font-medium">Ваше селфи здесь</p>
                             </div>
                         </div>
                         
                         <!-- Decorative Elements -->
-                        <div class="absolute -top-4 -right-4 w-8 h-8 bg-blue-500 rounded-full animate-pulse-slow"></div>
-                        <div class="absolute -bottom-4 -left-4 w-6 h-6 bg-purple-500 rounded-full animate-pulse-slow" style="animation-delay: 2s;"></div>
-                        <div class="absolute top-1/2 -right-8 w-4 h-4 bg-green-500 rounded-full animate-pulse-slow" style="animation-delay: 4s;"></div>
+                        <div class="absolute -top-4 -right-4 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full animate-pulse-slow"></div>
+                        <div class="absolute -bottom-4 -left-4 w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full animate-pulse-slow" style="animation-delay: 2s;"></div>
+                        <div class="absolute top-1/2 -right-8 w-4 h-4 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full animate-pulse-slow" style="animation-delay: 4s;"></div>
                     </div>
                 </div>
             </div>
@@ -193,14 +396,14 @@
     </section>
 
     <!-- How It Works Section -->
-    <section class="py-20 bg-white">
+    <section class="py-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Section Header -->
             <div class="text-center mb-16">
-                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+                <h2 class="text-3xl sm:text-4xl font-bold text-pixora-primary mb-4">
                     Как это работает?
                 </h2>
-                <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                <p class="text-xl text-pixora-secondary max-w-3xl mx-auto">
                     Всего три простых шага, чтобы найти все свои фотографии
                 </p>
             </div>
@@ -208,36 +411,36 @@
             <!-- Steps -->
             <div class="grid md:grid-cols-3 gap-8">
                 <!-- Step 1 -->
-                <div class="step-card bg-white rounded-2xl p-8 text-center border border-gray-100 shadow-lg">
+                <div class="step-card glass-card-hover">
                     <div class="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                         <i class="fas fa-link text-white text-2xl"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-gray-900 mb-4">1. Получите ссылку</h3>
-                    <p class="text-gray-600">
+                    <h3 class="text-xl font-bold text-pixora-primary mb-4">1. Получите ссылку</h3>
+                    <p class="text-pixora-secondary">
                         Фотограф предоставит вам персональную ссылку 
                         для доступа к поиску ваших фотографий.
                     </p>
                 </div>
                 
                 <!-- Step 2 -->
-                <div class="step-card bg-white rounded-2xl p-8 text-center border border-gray-100 shadow-lg">
+                <div class="step-card glass-card-hover">
                     <div class="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                         <i class="fas fa-camera text-white text-2xl"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-gray-900 mb-4">2. Загрузите селфи</h3>
-                    <p class="text-gray-600">
+                    <h3 class="text-xl font-bold text-pixora-primary mb-4">2. Загрузите селфи</h3>
+                    <p class="text-pixora-secondary">
                         Сделайте селфи или загрузите фото с вашим лицом. 
-                        Наш AI проанализирует ваши черты лица.
+                        Система мгновенного поиска найдет все ваши кадры.
                     </p>
                 </div>
                 
                 <!-- Step 3 -->
-                <div class="step-card bg-white rounded-2xl p-8 text-center border border-gray-100 shadow-lg">
+                <div class="step-card glass-card-hover">
                     <div class="w-16 h-16 bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                         <i class="fas fa-images text-white text-2xl"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-gray-900 mb-4">3. Получите свои фото</h3>
-                    <p class="text-gray-600">
+                    <h3 class="text-xl font-bold text-pixora-primary mb-4">3. Получите свои фото</h3>
+                    <p class="text-pixora-secondary">
                         Просматривайте, выбирайте и скачивайте все 
                         найденные фотографии в высоком качестве.
                     </p>
@@ -247,14 +450,14 @@
     </section>
 
     <!-- FAQ Section -->
-    <section class="py-20 bg-gray-50">
+    <section class="py-20">
         <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Section Header -->
             <div class="text-center mb-16">
-                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+                <h2 class="text-3xl sm:text-4xl font-bold text-pixora-primary mb-4">
                     Часто задаваемые вопросы
                 </h2>
-                <p class="text-xl text-gray-600">
+                <p class="text-xl text-pixora-secondary">
                     Ответы на популярные вопросы о нашем сервисе
                 </p>
             </div>
@@ -262,41 +465,41 @@
             <!-- FAQ Items -->
             <div class="space-y-4">
                 <!-- FAQ Item 1 -->
-                <div class="faq-item bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-gray-50 transition-colors">
-                        <span class="font-semibold text-gray-900">Насколько точно работает распознавание лиц?</span>
-                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+                <div class="faq-item">
+                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-glass-hover transition-colors">
+                        <span class="font-semibold text-pixora-primary">Насколько точно работает распознавание лиц?</span>
+                        <i class="fas fa-chevron-down text-pixora-secondary transition-transform duration-300"></i>
                     </button>
                     <div class="faq-content hidden px-6 pb-5">
-                        <p class="text-gray-600">
-                            Наш AI использует современные алгоритмы распознавания лиц с точностью более 95%. 
-                            Система учитывает различные углы съемки, освещение и качество фотографий.
+                        <p class="text-pixora-secondary">
+                            Наша система использует современные алгоритмы поиска с точностью более 95%. 
+                            Технология учитывает различные углы съемки, освещение и качество фотографий.
                         </p>
                     </div>
                 </div>
                 
                 <!-- FAQ Item 2 -->
-                <div class="faq-item bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-gray-50 transition-colors">
-                        <span class="font-semibold text-gray-900">Безопасно ли загружать свои фотографии?</span>
-                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+                <div class="faq-item">
+                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-glass-hover transition-colors">
+                        <span class="font-semibold text-pixora-primary">Безопасно ли загружать свои фотографии?</span>
+                        <i class="fas fa-chevron-down text-pixora-secondary transition-transform duration-300"></i>
                     </button>
                     <div class="faq-content hidden px-6 pb-5">
-                        <p class="text-gray-600">
-                            Да, абсолютно безопасно. Мы используем шифрование данных и не сохраняем ваши селфи. 
-                            Все загруженные изображения автоматически удаляются после обработки.
+                        <p class="text-pixora-secondary">
+                            Да, абсолютно безопасно. Мы используем шифрование данных и защищенное хранение. 
+                            Все загруженные изображения автоматически удаляются после завершения поиска.
                         </p>
                     </div>
                 </div>
                 
                 <!-- FAQ Item 3 -->
-                <div class="faq-item bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-gray-50 transition-colors">
-                        <span class="font-semibold text-gray-900">Сколько времени занимает поиск?</span>
-                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+                <div class="faq-item">
+                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-glass-hover transition-colors">
+                        <span class="font-semibold text-pixora-primary">Сколько времени занимает поиск?</span>
+                        <i class="fas fa-chevron-down text-pixora-secondary transition-transform duration-300"></i>
                     </button>
                     <div class="faq-content hidden px-6 pb-5">
-                        <p class="text-gray-600">
+                        <p class="text-pixora-secondary">
                             Обычно поиск занимает от 10 до 30 секунд, в зависимости от размера базы фотографий. 
                             Для больших фотосессий время может увеличиться до 1-2 минут.
                         </p>
@@ -304,29 +507,29 @@
                 </div>
                 
                 <!-- FAQ Item 4 -->
-                <div class="faq-item bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-gray-50 transition-colors">
-                        <span class="font-semibold text-gray-900">Можно ли найти фото других людей?</span>
-                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+                <div class="faq-item">
+                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-glass-hover transition-colors">
+                        <span class="font-semibold text-pixora-primary">Можно ли найти фото других людей?</span>
+                        <i class="fas fa-chevron-down text-pixora-secondary transition-transform duration-300"></i>
                     </button>
                     <div class="faq-content hidden px-6 pb-5">
-                        <p class="text-gray-600">
-                            Нет, система показывает только те фотографии, на которых найдено лицо с загруженного селфи. 
-                            Мы строго соблюдаем приватность и не предоставляем доступ к чужим фотографиям.
+                        <p class="text-pixora-secondary">
+                            Нет, система показывает только те фотографии, где найдено совпадение с вашим селфи. 
+                            Мы строго соблюдаем приватность и защищаем персональные данные клиентов.
                         </p>
                     </div>
                 </div>
                 
                 <!-- FAQ Item 5 -->
-                <div class="faq-item bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-gray-50 transition-colors">
-                        <span class="font-semibold text-gray-900">Что делать, если фото не найдены?</span>
-                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+                <div class="faq-item">
+                    <button class="faq-toggle w-full px-6 py-5 text-left flex justify-between items-center hover:bg-glass-hover transition-colors">
+                        <span class="font-semibold text-pixora-primary">Что делать, если фото не найдены?</span>
+                        <i class="fas fa-chevron-down text-pixora-secondary transition-transform duration-300"></i>
                     </button>
                     <div class="faq-content hidden px-6 pb-5">
-                        <p class="text-gray-600">
+                        <p class="text-pixora-secondary">
                             Попробуйте загрузить другое селфи с лучшим качеством и освещением. 
-                            Также убедитесь, что вы участвовали в данной фотосессии и ваши фото уже обработаны.
+                            Также убедитесь, что вы участвовали в данной фотосессии и фотографии уже загружены в галерею.
                         </p>
                     </div>
                 </div>
@@ -335,7 +538,7 @@
     </section>
 
     <!-- Footer -->
-    <footer class="bg-gray-900 text-white py-12">
+    <footer class="glass-card border-t border-glass text-pixora-primary py-12 mt-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="grid md:grid-cols-4 gap-8">
                 <!-- Company Info -->
@@ -344,9 +547,9 @@
                         <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
                             <i class="fas fa-camera text-white text-lg"></i>
                         </div>
-                        <span class="text-xl font-bold">PIXORASOFT</span>
+                        <span class="pixora-logo text-xl font-bold">PIXORA</span>
                     </div>
-                    <p class="text-gray-400 mb-4 max-w-md">
+                    <p class="text-pixora-secondary mb-4 max-w-md">
                         Современная платформа для поиска фотографий с помощью 
                         искусственного интеллекта. Быстро, точно, удобно.
                     </p>
@@ -354,26 +557,26 @@
                 
                 <!-- Links -->
                 <div>
-                    <h3 class="font-semibold mb-4">Сервис</h3>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="#" class="hover:text-white transition-colors">Как это работает</a></li>
-                        <li><a href="#" class="hover:text-white transition-colors">Поддержка</a></li>
-                        <li><a href="#" class="hover:text-white transition-colors">FAQ</a></li>
+                    <h3 class="font-semibold mb-4 text-pixora-primary">Сервис</h3>
+                    <ul class="space-y-2 text-pixora-secondary">
+                        <li><a href="#" class="hover:text-pixora-primary transition-colors">Как это работает</a></li>
+                        <li><a href="#" class="hover:text-pixora-primary transition-colors">Поддержка</a></li>
+                        <li><a href="#" class="hover:text-pixora-primary transition-colors">FAQ</a></li>
                     </ul>
                 </div>
                 
                 <!-- Contact -->
                 <div>
-                    <h3 class="font-semibold mb-4">Контакты</h3>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="#" class="hover:text-white transition-colors">Связаться с нами</a></li>
-                        <li><a href="#" class="hover:text-white transition-colors">Политика конфиденциальности</a></li>
-                        <li><a href="#" class="hover:text-white transition-colors">Условия использования</a></li>
+                    <h3 class="font-semibold mb-4 text-pixora-primary">Контакты</h3>
+                    <ul class="space-y-2 text-pixora-secondary">
+                        <li><a href="#" class="hover:text-pixora-primary transition-colors">Связаться с нами</a></li>
+                        <li><a href="#" class="hover:text-pixora-primary transition-colors">Политика конфиденциальности</a></li>
+                        <li><a href="#" class="hover:text-pixora-primary transition-colors">Условия использования</a></li>
                     </ul>
                 </div>
             </div>
             
-            <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+            <div class="border-t border-glass mt-8 pt-8 text-center text-pixora-secondary">
                 <p>&copy; 2026 PIXORASOFT. Все права защищены.</p>
             </div>
         </div>

@@ -377,19 +377,21 @@ class FacePassSession {
         event.target.value = '';
     }
 
-    showMobileLoadingIndicator(message = 'Загрузка...') {
+    showMobileLoadingIndicator(message = 'Подготовка к поиску...') {
         // Remove existing indicator
         this.hideMobileLoadingIndicator();
         
         const overlay = document.createElement('div');
         overlay.id = 'mobile-loading-overlay';
-        overlay.className = 'mobile-loading-overlay';
+        overlay.className = 'fixed top-0 left-0 right-0 bottom-0 flex items-center justify-center z-50';
+        overlay.style.background = 'rgba(248, 250, 252, 0.95)';
+        overlay.style.backdropFilter = 'blur(20px)';
         
         overlay.innerHTML = `
-            <div class="mobile-loading-content">
-                <div class="mobile-spinner"></div>
-                <p class="text-gray-700 font-medium">${message}</p>
-                <p class="text-sm text-gray-500 mt-2">Пожалуйста, подождите...</p>
+            <div class="glass-card p-8 rounded-2xl text-center max-w-sm mx-4">
+                <div class="pixora-spinner mx-auto mb-4"></div>
+                <p class="text-pixora-primary font-medium">${message}</p>
+                <p class="text-sm text-pixora-secondary mt-2">Пожалуйста, подождите...</p>
             </div>
         `;
         
@@ -450,7 +452,7 @@ class FacePassSession {
             console.error('Search error:', error);
             this.hideSection(this.searchLoading);
             this.hideMobileLoadingIndicator(); // Ensure loading is hidden on error
-            this.showToast('Ошибка при поиске фотографий. Попробуйте еще раз.', 'error');
+            this.showToast('Не удалось распознать изображение. Попробуйте другое селфи.', 'error');
             this.resetToHero();
         }
     }
@@ -476,7 +478,7 @@ class FacePassSession {
 
     createPhotoCard(photo, index) {
         const card = document.createElement('div');
-        card.className = 'photo-card bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer';
+        card.className = 'photo-card-pixora cursor-pointer';
         card.dataset.photoId = photo.id;
         card.dataset.index = index;
         
@@ -500,25 +502,25 @@ class FacePassSession {
         }
         
         card.innerHTML = `
-            <div class="photo-container">
+            <div class="photo-container relative">
                 <img src="${previewUrl}" alt="Фото ${index + 1}" class="photo-image" loading="lazy">
                 <div class="absolute top-3 right-3">
-                    <span class="similarity-badge text-white px-3 py-1 rounded-full text-sm font-semibold">
+                    <span class="similarity-badge">
                         ${similarityPercent}%
                     </span>
                 </div>
                 <div class="absolute top-3 left-3">
                     <div class="photo-checkbox-container">
-                        <input type="checkbox" class="photo-checkbox w-5 h-5 text-blue-600 rounded" data-photo-id="${photo.id}">
+                        <input type="checkbox" class="pixora-checkbox" data-photo-id="${photo.id}">
                     </div>
                 </div>
             </div>
             <div class="p-4">
                 <div class="flex justify-between items-start mb-3">
-                    <h3 class="font-semibold text-gray-900">Фото ${index + 1}</h3>
-                    <span class="text-sm font-medium text-green-600">${similarityPercent}% совпадение</span>
+                    <h3 class="font-semibold text-pixora-primary">Фото ${index + 1}</h3>
+                    <span class="text-sm font-medium text-gradient-simple">Точность: ${similarityPercent}%</span>
                 </div>
-                <button class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-colors view-photo-btn font-medium">
+                <button class="w-full btn-pixora view-photo-btn font-medium">
                     <i class="fas fa-eye mr-2"></i>
                     Просмотреть
                 </button>
@@ -526,16 +528,16 @@ class FacePassSession {
         `;
         
         // Add event listeners
-        const checkbox = card.querySelector('.photo-checkbox');
+        const checkbox = card.querySelector('.pixora-checkbox');
         const viewBtn = card.querySelector('.view-photo-btn');
         
         checkbox.addEventListener('change', (e) => {
             if (e.target.checked) {
                 this.selectedPhotos.add(photo.id);
-                card.classList.add('ring-2', 'ring-blue-500');
+                card.classList.add('selected');
             } else {
                 this.selectedPhotos.delete(photo.id);
-                card.classList.remove('ring-2', 'ring-blue-500');
+                card.classList.remove('selected');
             }
             this.updateSelectedCount();
         });
@@ -575,7 +577,8 @@ class FacePassSession {
         
         this.modalImage.src = previewUrl;
         this.modalTitle.textContent = `Фото ${index + 1}`;
-        this.modalSimilarity.textContent = `${similarityPercent}% совпадение`;
+        this.modalSimilarity.innerHTML = `Точность: ${similarityPercent}%`;
+        this.modalSimilarity.className = 'similarity-badge';
         
         // Update modal select button
         const isSelected = this.selectedPhotos.has(photo.id);
@@ -597,8 +600,8 @@ class FacePassSession {
     }
 
     selectAllPhotos() {
-        const checkboxes = document.querySelectorAll('.photo-checkbox');
-        const cards = document.querySelectorAll('.photo-card');
+        const checkboxes = document.querySelectorAll('.pixora-checkbox[data-photo-id]');
+        const cards = document.querySelectorAll('.photo-card-pixora');
         
         checkboxes.forEach((checkbox, index) => {
             checkbox.checked = true;
@@ -606,7 +609,7 @@ class FacePassSession {
             
             // Add visual selection state
             if (cards[index]) {
-                cards[index].classList.add('ring-2', 'ring-blue-500', 'selected');
+                cards[index].classList.add('selected');
             }
         });
         
@@ -711,19 +714,13 @@ class FacePassSession {
         const isMobile = window.innerWidth <= 768;
         
         if (isMobile) {
-            toast.className = `security-toast bg-white border-l-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+            toast.className = `pixora-toast fixed top-4 left-4 right-4 p-4 rounded-lg transform transition-all duration-300 translate-x-full z-50`;
         } else {
-            toast.className = `bg-white border-l-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full max-w-sm`;
+            toast.className = `pixora-toast p-4 rounded-lg transform transition-all duration-300 translate-x-full max-w-sm`;
         }
         
-        const colors = {
-            success: 'border-green-500 text-green-700',
-            error: 'border-red-500 text-red-700',
-            info: 'border-blue-500 text-blue-700',
-            warning: 'border-yellow-500 text-yellow-700'
-        };
-        
-        toast.classList.add(...colors[type].split(' '));
+        // Add type-specific styling
+        toast.classList.add(type);
         
         const icons = {
             success: '✅',
@@ -735,8 +732,8 @@ class FacePassSession {
         toast.innerHTML = `
             <div class="flex items-center">
                 <span class="mr-3 text-lg">${icons[type]}</span>
-                <span class="flex-1">${message}</span>
-                <button onclick="this.closest('div').remove()" class="ml-3 text-gray-400 hover:text-gray-600">
+                <span class="flex-1 text-pixora-primary">${message}</span>
+                <button onclick="this.closest('div').remove()" class="ml-3 text-pixora-secondary hover:text-pixora-primary">
                     <i class="fas fa-times"></i>
                 </button>
             </div>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixora Light Theme Test</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Pixora Light Theme Variables */
+        :root {
+            --bg-primary: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+            --bg-secondary: #f8fafc;
+            --bg-glass: rgba(255, 255, 255, 0.7);
+            --bg-glass-hover: rgba(255, 255, 255, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.2);
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-secondary: #4f46e5;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-error: #ef4444;
+            --accent-pink: #ec4899;
+            --glow-primary: rgba(99, 102, 241, 0.1);
+            --glow-secondary: rgba(79, 70, 229, 0.1);
+            --indigo-primary: #6366f1;
+            --input-bg: #f8fafc;
+            --input-border: #e2e8f0;
+            --badge-success-bg: #dcfce7;
+            --badge-success-text: #166534;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* Animated Background */
+        .pixora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+        }
+        
+        .pixora-bg::before {
+            content: '';
+            position: absolute;
+            top: 20%;
+            left: 10%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(147, 197, 253, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: float-glow 8s ease-in-out infinite;
+        }
+        
+        .pixora-bg::after {
+            content: '';
+            position: absolute;
+            bottom: 20%;
+            right: 10%;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(196, 181, 253, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: float-glow 10s ease-in-out infinite reverse;
+        }
+
+        @keyframes float-glow {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
+            50% { transform: translate(-20px, -30px) scale(1.1); opacity: 0.5; }
+        }
+
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Glass Cards */
+        .glass-card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            background: var(--bg-glass-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .photo-card-test {
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 200px;
+            height: 250px;
+            display: inline-block;
+            margin: 10px;
+        }
+
+        .photo-card-test:hover {
+            background: var(--bg-glass-hover);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        /* Buttons */
+        .btn-pixora {
+            background: linear-gradient(to right, #6366f1, #4f46e5);
+            border: none;
+            border-radius: 16px;
+            color: white;
+            font-weight: 600;
+            padding: 16px 32px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            height: 56px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px;
+        }
+
+        .btn-pixora:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--glow-primary);
+        }
+
+        .btn-pixora:active {
+            transform: scale(0.95);
+        }
+
+        .btn-camera {
+            background: linear-gradient(to right, var(--accent-success), #059669);
+        }
+
+        .btn-upload {
+            background: linear-gradient(to right, var(--accent-secondary), #7c3aed);
+        }
+
+        /* Typography */
+        .text-gradient {
+            background: linear-gradient(to right, #6366f1, #ec4899, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .text-gradient-simple {
+            background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Checkbox */
+        .pixora-checkbox {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--input-border);
+            border-radius: 6px;
+            background: var(--input-bg);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .pixora-checkbox:checked {
+            background: var(--indigo-primary);
+            border-color: var(--indigo-primary);
+        }
+
+        .pixora-checkbox:checked::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Badge */
+        .similarity-badge {
+            background: var(--badge-success-bg);
+            color: var(--badge-success-text);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 12px;
+            padding: 4px 12px;
+            display: inline-block;
+            margin: 5px;
+        }
+
+        /* Grid */
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 768px) {
+            .photo-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+            
+            .btn-pixora {
+                height: 48px;
+                padding: 12px 24px;
+                font-size: 15px;
+            }
+        }
+
+        h1, h2, h3 {
+            color: var(--text-primary);
+        }
+
+        p {
+            color: var(--text-secondary);
+            font-size: 16px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="pixora-bg"></div>
+
+    <div class="test-container">
+        <h1 class="text-gradient">Pixora Light Theme - Воздушный дизайн</h1>
+        
+        <div class="glass-card">
+            <h2>🎨 Цветовая схема</h2>
+            <p><strong>Фон:</strong> Градиент от #f8fafc до #e0f2fe</p>
+            <p><strong>Текст:</strong> Основной #1e293b, приглушенный #64748b</p>
+            <p><strong>Карточки:</strong> Белый полупрозрачный bg-white/70 с backdrop-blur</p>
+            <p><strong>Glow эффекты:</strong> Мягкие пастельные пятна с низкой непрозрачностью</p>
+        </div>
+
+        <div class="glass-card">
+            <h2>🔘 Кнопки</h2>
+            <p>Primary кнопки с точным градиентом и эффектом нажатия:</p>
+            <button class="btn-pixora">
+                <i class="fas fa-camera"></i>&nbsp;Снять с камеры
+            </button>
+            <button class="btn-pixora btn-camera">
+                <i class="fas fa-upload"></i>&nbsp;Загрузить фото
+            </button>
+            <button class="btn-pixora btn-upload">Купить выбранные</button>
+        </div>
+
+        <div class="glass-card">
+            <h2>🖼️ Карточки фото</h2>
+            <p>Glassmorphism Light с bg-white/70 и мягкими тенями:</p>
+            <div class="photo-grid">
+                <div class="photo-card-test">
+                    <div style="padding: 20px; text-align: center;">
+                        <div style="width: 100%; height: 120px; background: linear-gradient(45deg, #6366f1, #ec4899); border-radius: 8px; margin-bottom: 10px;"></div>
+                        <h4 style="margin: 5px 0; color: var(--text-primary);">Фото 1</h4>
+                        <span class="similarity-badge">95%</span>
+                    </div>
+                </div>
+                <div class="photo-card-test">
+                    <div style="padding: 20px; text-align: center;">
+                        <div style="width: 100%; height: 120px; background: linear-gradient(45deg, #10b981, #059669); border-radius: 8px; margin-bottom: 10px;"></div>
+                        <h4 style="margin: 5px 0; color: var(--text-primary);">Фото 2</h4>
+                        <span class="similarity-badge">87%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <h3>☑️ Инпуты</h3>
+            <p>Фон полей #f8fafc, границы #e2e8f0:</p>
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" class="pixora-checkbox">
+                <span>Я принимаю <span class="text-gradient-simple">правила обработки персональных данных</span></span>
+            </label>
+        </div>
+
+        <div class="glass-card">
+            <h3>📝 Типографика</h3>
+            <h1 class="text-gradient">Заголовок с тройным градиентом</h1>
+            <p>Основной текст 16px с line-height: 1.5. Цвет #1e293b для основного текста и #64748b для приглушенного.</p>
+        </div>
+
+        <div class="glass-card">
+            <h3>🏷️ Бейджи</h3>
+            <p>bg-green-100 и text-green-800 для светлой темы:</p>
+            <span class="similarity-badge">95%</span>
+            <span class="similarity-badge">87%</span>
+            <span class="similarity-badge">72%</span>
+        </div>
+
+        <div class="glass-card">
+            <h3>✨ Результат</h3>
+            <p>Сайт выглядит легким, "воздушным" и полностью соответствует staging.pixorasoft.ru/login:</p>
+            <ul style="color: var(--text-secondary);">
+                <li>Светлый градиентный фон</li>
+                <li>Glassmorphism эффекты с белым полупрозрачным фоном</li>
+                <li>Темный текст для лучшей читаемости</li>
+                <li>Мягкие пастельные glow эффекты</li>
+                <li>Современная типографика Inter</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Test button active effect
+        document.querySelectorAll('.btn-pixora').forEach(btn => {
+            btn.addEventListener('mousedown', () => {
+                btn.style.transform = 'scale(0.95)';
+            });
+            btn.addEventListener('mouseup', () => {
+                btn.style.transform = 'translateY(-2px)';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = '';
+            });
+        });
+    </script>
+</body>
+</html>
