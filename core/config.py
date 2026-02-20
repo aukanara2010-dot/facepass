@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # Domain configuration
     DOMAIN: str = "facepass.pixorasoft.ru"
     STAGING_DOMAIN: str = "staging.pixorasoft.ru"
+    MAIN_API_URL: str = "https://staging.pixorasoft.ru"
+    MAIN_URL: str = "https://staging.pixorasoft.ru"
     
     # Database - Main (Required fields)
     POSTGRES_USER: str

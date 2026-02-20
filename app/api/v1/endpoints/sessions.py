@@ -8,14 +8,18 @@ and checking FacePass status from the external Pixora database.
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from sqlalchemy import text
+from typing import Dict, Any, List
 import os
+import logging
 
 from core.database import get_pixora_db
 from models.photo_session import PhotoSession
 from app.schemas.photo_session import SessionValidationResponse, PhotoSessionResponse
+from core.config import get_settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get(
@@ -265,3 +269,111 @@ async def session_interface(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error serving interface: {str(e)}"
         )
+
+
+@router.get(
+    "/{session_id}/services",
+    response_model=Dict[str, Any],
+    summary="Get session services and pricing",
+    description="Get available services and pricing for a photo session from Pixora API"
+)
+async def get_session_services(
+    session_id: str,
+    pixora_db: Session = Depends(get_pixora_db)
+) -> Dict[str, Any]:
+    """
+    Get services and pricing for a session.
+    
+    This endpoint fetches available services (packages) for a photo session
+    from the Pixora database, including pricing information.
+    
+    Args:
+        session_id (str): The photo session UUID
+        pixora_db (Session): Database session for Pixora database
+        
+    Returns:
+        Dict[str, Any]: Services and pricing information
+        
+    Raises:
+        HTTPException: If session not found or database error
+    """
+    try:
+        settings = get_settings()
+        
+        # First validate session exists
+        session = pixora_db.query(PhotoSession).filter(
+            PhotoSession.id == session_id
+        ).first()
+        
+        if not session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found"
+            )
+        
+        # Query services/packages for this session
+        # Assuming there's a packages table linked to sessions
+        query = text("""
+            SELECT 
+                p.id,
+                p.name,
+                p.description,
+                p.price,
+                p.is_default,
+                p.type,
+                p.photo_count,
+                p.is_active
+            FROM public.packages p
+            WHERE p.photo_session_id = :session_id
+                AND p.is_active = true
+            ORDER BY p.is_default DESC, p.price ASC
+        """)
+        
+        result = pixora_db.execute(query, {"session_id": session_id})
+        
+        services = []
+        default_service = None
+        
+        for row in result:
+            service = {
+                "id": row[0],
+                "name": row[1],
+                "description": row[2],
+                "price": float(row[3]) if row[3] else 0.0,
+                "isDefault": bool(row[4]),
+                "type": row[5],
+                "photoCount": row[6],
+                "isActive": bool(row[7])
+            }
+            
+            services.append(service)
+            
+            if service["isDefault"]:
+                default_service = service
+        
+        logger.info(f"Found {len(services)} services for session {session_id}")
+        
+        return {
+            "sessionId": session_id,
+            "sessionName": session.name,
+            "services": services,
+            "defaultService": default_service,
+            "currency": "RUB",
+            "mainUrl": settings.MAIN_URL
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching services for session {session_id}: {str(e)}")
+        # Return empty services if table doesn't exist or other error
+        # This allows the interface to work in view-only mode
+        return {
+            "sessionId": session_id,
+            "sessionName": session.name if session else "Unknown",
+            "services": [],
+            "defaultService": None,
+            "currency": "RUB",
+            "mainUrl": settings.MAIN_URL,
+            "error": "Services not available"
+        }

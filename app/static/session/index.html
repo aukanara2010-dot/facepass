@@ -394,6 +394,18 @@
             padding: 4px 12px;
         }
         
+        /* Price Badge - Pixora Design System */
+        .price-badge {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            z-index: 10;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 9999px;
+        }
+        
         /* Mobile Optimizations - Pixora Design System v1.0 */
         @media (max-width: 768px) {
             .pixora-bg::before,
@@ -975,7 +987,32 @@
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
+    <!-- Floating Purchase Bar -->
+    <div id="floating-bar" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-white/70 backdrop-blur-md border-t border-white/20 shadow-2xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <!-- Left: Selection Info -->
+                <div class="text-center sm:text-left">
+                    <p class="text-sm text-pixora-secondary">Выбрано фото: <span id="selected-count" class="font-bold text-pixora-primary">0</span></p>
+                    <p class="text-lg font-bold text-gradient-simple">Итого: <span id="total-price">0</span> ₽</p>
+                </div>
+                
+                <!-- Right: Action Buttons -->
+                <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <button id="buy-selected-btn" class="btn-pixora btn-camera whitespace-nowrap">
+                        <i class="fas fa-shopping-cart mr-2"></i>
+                        Купить выбранные
+                    </button>
+                    <button id="buy-archive-btn" class="btn-pixora whitespace-nowrap" style="background: linear-gradient(to right, #8b5cf6, #7c3aed);">
+                        <i class="fas fa-archive mr-2"></i>
+                        Купить весь архив
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript -->
-    <script src="/static/js/face-search.js"></script>
+    <script src="/static/js/face-search-pricing.js"></script>
 </body>
 </html>
