@@ -314,8 +314,10 @@ async def get_session_services(
     """
     Get services and pricing for a session.
     
-    This endpoint fetches available services (packages) for a photo session
-    from the Pixora database, including pricing information.
+    This endpoint fetches available services for a photo session
+    from the Pixora database through the service_packages relationship.
+    
+    Schema: photo_sessions -> service_package_id -> service_package_services -> services
     
     Args:
         session_id (str): The photo session UUID
@@ -341,22 +343,25 @@ async def get_session_services(
                 detail="Session not found"
             )
         
-        # Query services/packages for this session
-        # Assuming there's a packages table linked to sessions
+        # Query services for this session through service_packages
+        # Schema: photo_sessions -> service_package_id -> service_package_services -> services
         query = text("""
             SELECT 
-                p.id,
-                p.name,
-                p.description,
-                p.price,
-                p.is_default,
-                p.type,
-                p.photo_count,
-                p.is_active
-            FROM public.packages p
-            WHERE p.photo_session_id = :session_id
-                AND p.is_active = true
-            ORDER BY p.is_default DESC, p.price ASC
+                s.id,
+                s.name,
+                s.description,
+                s.price,
+                sps.is_default,
+                s.type,
+                s.photo_count,
+                s.is_active
+            FROM public.photo_sessions ps
+            INNER JOIN public.service_packages sp ON ps.service_package_id = sp.id
+            INNER JOIN public.service_package_services sps ON sp.id = sps.service_package_id
+            INNER JOIN public.services s ON sps.service_id = s.id
+            WHERE ps.id = :session_id
+                AND s.is_active = true
+            ORDER BY sps.is_default DESC, s.price ASC
         """)
         
         result = pixora_db.execute(query, {"session_id": session_id})

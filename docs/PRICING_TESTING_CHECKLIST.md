@@ -11,9 +11,10 @@
 ### Database Setup
 - [ ] Test session exists in Pixora database
 - [ ] Test session has `facepass_enabled = true`
-- [ ] Test session has services/packages configured
-- [ ] At least one service has `isDefault = true`
-- [ ] At least one service has `type = 'digital'`
+- [ ] Test session has `service_package_id` set
+- [ ] Service package has services configured in `service_package_services`
+- [ ] At least one service has `is_default = true` in `service_package_services`
+- [ ] Services have valid `type` field (e.g., 'digital', 'print')
 
 ## 🔍 Backend Testing
 

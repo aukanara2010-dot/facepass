@@ -186,7 +186,7 @@ https://staging.pixorasoft.ru/session/{session_id}/cart?package=digital&source=f
 
 ## Режим "только просмотр"
 
-Если услуги недоступны (таблица packages пустая или не существует):
+Если услуги недоступны (сессия не имеет service_package_id или таблицы не существуют):
 
 - ❌ Ценники не отображаются
 - ❌ Floating bar скрыта
@@ -304,24 +304,31 @@ this.photoPrice > 0 &&            // Есть цена для фото
 ### Добавление новых типов услуг
 
 ```sql
-INSERT INTO packages (photo_session_id, name, price, type)
-VALUES ('session-id', 'Печать 10x15', 50.00, 'print');
+-- 1. Создать услугу
+INSERT INTO services (id, name, description, price, type, is_active)
+VALUES (gen_random_uuid(), 'Печать 10x15', 'Печать фотографии 10x15 см', 50.00, 'print', true);
+
+-- 2. Связать услугу с пакетом сессии
+INSERT INTO service_package_services (service_package_id, service_id, is_default)
+SELECT ps.service_package_id, s.id, false
+FROM photo_sessions ps, services s
+WHERE ps.id = 'session-id' AND s.name = 'Печать 10x15';
 ```
 
 ### Изменение цен
 
 ```sql
-UPDATE packages 
+UPDATE services 
 SET price = 200.00 
-WHERE type = 'digital' AND photo_session_id = 'session-id';
+WHERE type = 'digital' AND name = 'Цифровая копия';
 ```
 
 ### Деактивация услуги
 
 ```sql
-UPDATE packages 
+UPDATE services 
 SET is_active = false 
-WHERE id = 123;
+WHERE id = 'service-uuid';
 ```
 
 ## Поддержка

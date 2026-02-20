@@ -241,7 +241,7 @@ Redirect to: {MAIN_URL}/session/{id}/cart?package=digital&source=facepass
 
 ### Услуги недоступны
 
-Если API не возвращает услуги или таблица `packages` не существует:
+Если API не возвращает услуги или сессия не имеет `service_package_id`:
 
 1. Endpoint возвращает пустой список услуг
 2. Frontend работает в режиме "только просмотр"
