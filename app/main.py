@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse
 from app.api.v1.router import api_router
 import asyncio
+import httpx
 
 # Import models to ensure they are registered with Base
 from models.event import Event
@@ -167,6 +168,96 @@ async def sitemap_xml():
         <priority>1.0</priority>
     </url>
 </urlset>"""
+
+# Proxy endpoint for Pixora services to bypass CORS
+@app.get("/api/v1/remote-services/{session_id}")
+async def get_remote_services(session_id: str):
+    """
+    Proxy endpoint to fetch services from Pixora API.
+    
+    This endpoint bypasses CORS issues by making server-to-server requests
+    to the Pixora API and returning the JSON response to the frontend.
+    
+    Args:
+        session_id (str): The photo session UUID
+        
+    Returns:
+        JSON: Services and pricing information from Pixora API
+        
+    Raises:
+        HTTPException: If Pixora API is unreachable or returns an error
+    """
+    from fastapi import HTTPException
+    from core.config import get_settings
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    settings = get_settings()
+    
+    # Construct Pixora API URL
+    pixora_url = f"{settings.MAIN_API_URL}/api/session/{session_id}/services"
+    
+    try:
+        logger.info(f"Proxying request to Pixora API: {pixora_url}")
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(pixora_url)
+            
+            if response.status_code == 200:
+                logger.info(f"Successfully fetched services for session {session_id}")
+                return response.json()
+            elif response.status_code == 404:
+                logger.warning(f"Session {session_id} not found in Pixora API")
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "error": "Session not found",
+                        "message": f"Session {session_id} not found in Pixora API",
+                        "session_id": session_id
+                    }
+                )
+            else:
+                logger.error(f"Pixora API returned {response.status_code}: {response.text}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail={
+                        "error": "Pixora API error",
+                        "message": f"Pixora API returned status {response.status_code}",
+                        "pixora_response": response.text[:500]  # Limit response size
+                    }
+                )
+                
+    except httpx.TimeoutException:
+        logger.error(f"Timeout while fetching services from Pixora API: {pixora_url}")
+        raise HTTPException(
+            status_code=408,
+            detail={
+                "error": "Request timeout",
+                "message": "Pixora API did not respond within 30 seconds",
+                "suggestion": "Try again later or contact support"
+            }
+        )
+    except httpx.RequestError as e:
+        logger.error(f"Network error while fetching services from Pixora API: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "Network error",
+                "message": "Unable to connect to Pixora API",
+                "suggestion": "Check your internet connection or try again later"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error while fetching services: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Internal server error",
+                "message": "An unexpected error occurred while fetching services",
+                "suggestion": "Contact support if the issue persists"
+            }
+        )
+
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")

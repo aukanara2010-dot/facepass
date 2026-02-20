@@ -149,42 +149,37 @@ class FacePassSession {
 
     async loadServicesFromPixora() {
         /**
-         * Load services directly from Pixora main API
-         * Always fetch fresh data - never use cached/local prices
+         * Load services through FacePass proxy endpoint
+         * This bypasses CORS issues by using server-to-server requests
          */
         this.servicesLoading = true;
         this.servicesError = false;
         
         try {
-            // Get MAIN_API_URL from environment or use hardcoded fallback
-            // Check if template variable wasn't replaced (contains {{ or }})
-            let mainApiUrl = window.MAIN_API_URL && 
-                            !window.MAIN_API_URL.includes('{{') && 
-                            !window.MAIN_API_URL.includes('}}')
-                ? window.MAIN_API_URL 
-                : 'https://staging.pixorasoft.ru';
+            // Use local proxy endpoint instead of direct Pixora API call
+            const servicesUrl = `/api/v1/remote-services/${this.sessionId}`;
             
-            // Ensure URL doesn't have trailing slash and starts with http
-            mainApiUrl = mainApiUrl.replace(/\/$/, '');
-            
-            // Construct correct API path - ensure it's absolute URL
-            const servicesUrl = `${mainApiUrl}/api/session/${this.sessionId}/services`;
-            
-            console.log('MAIN_API_URL from window:', window.MAIN_API_URL);
-            console.log('Using API URL:', mainApiUrl);
-            console.log('Fetching services from Pixora API:', servicesUrl);
+            console.log('Fetching services through FacePass proxy:', servicesUrl);
             
             const response = await fetch(servicesUrl, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
                 },
-                // Add credentials if needed for CORS
-                credentials: 'omit'
+                credentials: 'same-origin'  // Use same-origin for local requests
             });
             
             if (!response.ok) {
-                console.warn(`Services API returned ${response.status}, running in view-only mode`);
+                console.warn(`Proxy API returned ${response.status}, running in view-only mode`);
+                
+                // Try to get error details
+                try {
+                    const errorData = await response.json();
+                    console.error('Proxy API error details:', errorData);
+                } catch (e) {
+                    console.error('Failed to parse error response');
+                }
+                
                 this.servicesLoading = false;
                 this.servicesError = true;
                 this.updateUIForViewOnlyMode();
@@ -192,10 +187,19 @@ class FacePassSession {
             }
 
             const data = await response.json();
-            console.log('Services loaded from Pixora:', data);
+            console.log('Services loaded through proxy:', data);
             
             this.servicesData = data;
-            this.mainUrl = mainApiUrl;
+            
+            // Get MAIN_URL from settings for purchase redirects
+            let mainUrl = window.MAIN_API_URL && 
+                         !window.MAIN_API_URL.includes('{{') && 
+                         !window.MAIN_API_URL.includes('}}')
+                ? window.MAIN_API_URL 
+                : 'https://staging.pixorasoft.ru';
+            
+            mainUrl = mainUrl.replace(/\/$/, '');
+            this.mainUrl = mainUrl;
             
             // Extract prices using helper function
             const prices = this.getServicePrices(data.services || []);

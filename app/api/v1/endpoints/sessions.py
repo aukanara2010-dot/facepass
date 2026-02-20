@@ -6,12 +6,13 @@ and checking FacePass status from the external Pixora database.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Dict, Any, List
 import os
 import logging
+import httpx
 
 from core.database import get_pixora_db
 from models.photo_session import PhotoSession
@@ -417,3 +418,84 @@ async def get_session_services(
             "mainUrl": settings.MAIN_URL,
             "error": "Services not available"
         }
+
+
+
+@router.get(
+    "/remote-services/{session_id}",
+    response_class=JSONResponse,
+    summary="Proxy services from Pixora API",
+    description="Fetch services from Pixora main API via server-side proxy to bypass CORS"
+)
+async def get_remote_services(
+    session_id: str
+) -> JSONResponse:
+    """
+    Proxy endpoint to fetch services from Pixora API.
+    
+    This endpoint acts as a server-side proxy to bypass CORS restrictions.
+    It fetches services from the Pixora main API and returns them to the frontend.
+    
+    Server-to-server requests don't have CORS restrictions, so this solves
+    the CORS issue without requiring CORS configuration on Pixora API.
+    
+    Args:
+        session_id (str): The photo session UUID
+        
+    Returns:
+        JSONResponse: Services data from Pixora API
+        
+    Raises:
+        HTTPException: If Pixora API request fails
+    """
+    try:
+        settings = get_settings()
+        
+        # Construct Pixora API URL
+        pixora_api_url = f"{settings.MAIN_API_URL}/api/session/{session_id}/services"
+        
+        logger.info(f"Proxying services request to Pixora API: {pixora_api_url}")
+        
+        # Make server-to-server request (no CORS issues)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(pixora_api_url)
+            
+            if response.status_code == 404:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Session not found on Pixora API"
+                )
+            
+            if response.status_code != 200:
+                logger.error(f"Pixora API returned status {response.status_code}: {response.text}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Pixora API error: {response.status_code}"
+                )
+            
+            # Parse and return JSON
+            data = response.json()
+            logger.info(f"Successfully proxied services for session {session_id}: {len(data.get('services', []))} services")
+            
+            return JSONResponse(content=data)
+        
+    except httpx.TimeoutException:
+        logger.error(f"Timeout connecting to Pixora API for session {session_id}")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Pixora API timeout"
+        )
+    except httpx.RequestError as e:
+        logger.error(f"Error connecting to Pixora API: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Cannot connect to Pixora API: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in remote services proxy: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
