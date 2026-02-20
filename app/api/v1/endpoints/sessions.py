@@ -263,10 +263,13 @@ async def session_interface(
         )
         
         # Inject MAIN_API_URL from settings
+        # Replace the template placeholder with actual value
         html_content = html_content.replace(
-            "window.MAIN_API_URL = '{{ MAIN_API_URL }}'",
-            f"window.MAIN_API_URL = '{settings.MAIN_API_URL}'"
+            'window.MAIN_API_URL = "{{ MAIN_API_URL }}";',
+            f'window.MAIN_API_URL = "{settings.MAIN_API_URL}";'
         )
+        
+        logger.info(f"Serving interface for session {session_id} with MAIN_API_URL: {settings.MAIN_API_URL}")
         
         return HTMLResponse(content=html_content)
         

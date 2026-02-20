@@ -157,7 +157,15 @@ class FacePassSession {
         
         try {
             // Get MAIN_API_URL from environment or use default
-            const mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+            // Check if template variable wasn't replaced (contains {{ }})
+            let mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+            
+            if (mainApiUrl.includes('{{') || mainApiUrl.includes('}}')) {
+                console.warn('MAIN_API_URL not properly injected, using default');
+                mainApiUrl = 'https://staging.pixorasoft.ru';
+            }
+            
+            // Construct correct API path
             const servicesUrl = `${mainApiUrl}/api/session/${this.sessionId}/services`;
             
             console.log('Fetching services from Pixora API:', servicesUrl);
