@@ -44,6 +44,12 @@
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Environment Configuration -->
+    <script>
+        // Configuration from backend
+        window.MAIN_API_URL = '{{ MAIN_API_URL }}' || 'https://staging.pixorasoft.ru';
+    </script>
+    
     <style>
         /* Pixorasoft Dark Theme - Modern Glassmorphism Design */
         
@@ -404,6 +410,22 @@
             font-size: 13px;
             padding: 6px 14px;
             border-radius: 9999px;
+        }
+        
+        /* Price Badge Skeleton Loader */
+        .price-badge-skeleton {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
         
         /* Mobile Optimizations - Pixora Design System v1.0 */

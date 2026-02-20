@@ -12,13 +12,16 @@ class FacePassSession {
         this.selectedPhotos = new Set();
         this.searchResults = [];
         this.photoPrice = 0;
+        this.priceAll = 0;
         this.defaultService = null;
         this.mainUrl = '';
+        this.servicesLoading = true;
+        this.servicesError = false;
         
         this.initializeElements();
         this.bindEvents();
         this.validateSession();
-        this.loadServices();
+        this.loadServicesFromPixora();
     }
 
     getSessionIdFromUrl() {
@@ -144,40 +147,133 @@ class FacePassSession {
         });
     }
 
-    async loadServices() {
+    async loadServicesFromPixora() {
+        /**
+         * Load services directly from Pixora main API
+         * Always fetch fresh data - never use cached/local prices
+         */
+        this.servicesLoading = true;
+        this.servicesError = false;
+        
         try {
-            const response = await fetch(`/api/v1/sessions/${this.sessionId}/services`);
+            // Get MAIN_API_URL from environment or use default
+            const mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+            const servicesUrl = `${mainApiUrl}/api/session/${this.sessionId}/services`;
+            
+            console.log('Fetching services from Pixora API:', servicesUrl);
+            
+            const response = await fetch(servicesUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+                // Add credentials if needed for CORS
+                credentials: 'omit'
+            });
             
             if (!response.ok) {
-                console.warn('Services not available, running in view-only mode');
+                console.warn(`Services API returned ${response.status}, running in view-only mode`);
+                this.servicesLoading = false;
+                this.servicesError = true;
+                this.updateUIForViewOnlyMode();
                 return;
             }
 
-            this.servicesData = await response.json();
-            this.mainUrl = this.servicesData.mainUrl || 'https://staging.pixorasoft.ru';
+            const data = await response.json();
+            console.log('Services loaded from Pixora:', data);
             
-            // Find digital copy service (usually the cheapest one for single photos)
-            const digitalService = this.servicesData.services.find(s => 
-                s.type === 'digital' || s.name.toLowerCase().includes('цифровая')
-            );
+            this.servicesData = data;
+            this.mainUrl = mainApiUrl;
             
-            if (digitalService) {
-                this.photoPrice = digitalService.price;
-            }
+            // Extract prices using helper function
+            const prices = this.getServicePrices(data.services || []);
+            this.photoPrice = prices.price_single;
+            this.priceAll = prices.price_all;
+            this.defaultService = data.services?.find(s => s.isDefault);
             
-            // Find default service (full archive)
-            this.defaultService = this.servicesData.defaultService;
+            this.servicesLoading = false;
             
-            console.log('Services loaded:', {
+            console.log('Pricing configured:', {
                 photoPrice: this.photoPrice,
+                priceAll: this.priceAll,
                 defaultService: this.defaultService,
                 mainUrl: this.mainUrl
             });
             
+            // Update UI if results are already displayed
+            if (this.searchResults.length > 0) {
+                this.updateFloatingBar();
+            }
+            
         } catch (error) {
-            console.error('Error loading services:', error);
-            // Continue in view-only mode
+            console.error('Error loading services from Pixora:', error);
+            this.servicesLoading = false;
+            this.servicesError = true;
+            this.updateUIForViewOnlyMode();
         }
+    }
+
+    getServicePrices(services) {
+        /**
+         * Extract pricing from services array
+         * Returns: { price_single, price_all }
+         */
+        if (!services || services.length === 0) {
+            return { price_single: 0, price_all: 0 };
+        }
+        
+        // Find default service (full archive)
+        const defaultService = services.find(s => s.isDefault === true);
+        const price_all = defaultService ? defaultService.price : 0;
+        
+        // Find single photo service (digital copy)
+        // Priority: 1) type='digital', 2) name contains 'цифровая' or 'digital', 3) first service
+        let singleService = services.find(s => 
+            s.type === 'digital' || 
+            s.type === 'single' ||
+            s.name?.toLowerCase().includes('цифровая') ||
+            s.name?.toLowerCase().includes('digital') ||
+            s.name?.toLowerCase().includes('копия')
+        );
+        
+        // Fallback to first non-default service
+        if (!singleService) {
+            singleService = services.find(s => !s.isDefault);
+        }
+        
+        // Last resort: use first service
+        if (!singleService && services.length > 0) {
+            singleService = services[0];
+        }
+        
+        const price_single = singleService ? singleService.price : 0;
+        
+        console.log('Extracted prices:', {
+            price_single,
+            price_all,
+            singleService: singleService?.name,
+            defaultService: defaultService?.name
+        });
+        
+        return { price_single, price_all };
+    }
+
+    updateUIForViewOnlyMode() {
+        /**
+         * Update UI when services are not available
+         * Hide pricing elements, show view-only mode
+         */
+        console.log('Running in view-only mode (no pricing available)');
+        
+        // Hide floating bar if it exists
+        if (this.floatingBar) {
+            this.floatingBar.classList.add('hidden');
+        }
+        
+        // Remove price badges from existing cards
+        document.querySelectorAll('.price-badge').forEach(badge => {
+            badge.style.display = 'none';
+        });
     }
 
     async validateSession() {
@@ -492,14 +588,26 @@ class FacePassSession {
             previewUrl = `${s3BaseUrl}/staging/photos/${this.sessionId}/previews/${photo.file_name}`;
         }
         
-        // Price badge HTML
-        const priceBadge = this.photoPrice > 0 ? `
-            <div class="absolute top-3 left-3">
-                <span class="price-badge bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-lg">
-                    ${this.photoPrice} ₽
-                </span>
-            </div>
-        ` : '';
+        // Price badge HTML - show skeleton while loading, hide if no pricing
+        let priceBadge = '';
+        if (this.servicesLoading) {
+            // Skeleton loader
+            priceBadge = `
+                <div class="absolute top-3 left-3">
+                    <div class="price-badge-skeleton bg-gray-300 animate-pulse rounded-full" style="width: 60px; height: 28px;"></div>
+                </div>
+            `;
+        } else if (this.photoPrice > 0 && !this.servicesError) {
+            // Actual price
+            priceBadge = `
+                <div class="absolute top-3 left-3">
+                    <span class="price-badge bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-lg">
+                        ${this.photoPrice} ₽
+                    </span>
+                </div>
+            `;
+        }
+        // else: no pricing available, don't show badge
         
         card.innerHTML = `
             <div class="photo-container relative">
@@ -625,10 +733,30 @@ class FacePassSession {
     updateFloatingBar() {
         if (!this.floatingBar) return;
         
-        if (this.searchResults.length > 0 && this.photoPrice > 0) {
+        // Show floating bar only if:
+        // 1. We have search results
+        // 2. Services are loaded (not loading)
+        // 3. We have valid pricing (photoPrice > 0)
+        // 4. No services error
+        const shouldShow = this.searchResults.length > 0 && 
+                          !this.servicesLoading && 
+                          this.photoPrice > 0 && 
+                          !this.servicesError;
+        
+        if (shouldShow) {
             this.floatingBar.classList.remove('hidden');
         } else {
             this.floatingBar.classList.add('hidden');
+        }
+        
+        // Update button states
+        if (this.buySelectedBtn) {
+            this.buySelectedBtn.disabled = this.selectedPhotos.size === 0;
+        }
+        
+        if (this.buyArchiveBtn) {
+            // Disable if no default service or price_all is 0
+            this.buyArchiveBtn.disabled = !this.defaultService || this.priceAll === 0;
         }
     }
 

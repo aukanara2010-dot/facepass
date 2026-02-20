@@ -206,6 +206,8 @@ async def session_interface(
         HTMLResponse: HTML page for FacePass interface or error page
     """
     try:
+        settings = get_settings()
+        
         # Validate session first
         session = pixora_db.query(PhotoSession).filter(
             PhotoSession.id == session_id
@@ -258,6 +260,12 @@ async def session_interface(
         html_content = html_content.replace(
             "this.getSessionIdFromUrl()",
             f"'{session_id}'"
+        )
+        
+        # Inject MAIN_API_URL from settings
+        html_content = html_content.replace(
+            "window.MAIN_API_URL = '{{ MAIN_API_URL }}'",
+            f"window.MAIN_API_URL = '{settings.MAIN_API_URL}'"
         )
         
         return HTMLResponse(content=html_content)

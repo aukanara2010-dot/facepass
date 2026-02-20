@@ -2,72 +2,148 @@
 
 ## Что реализовано
 
-✅ Автоматическая загрузка цен из API Pixora  
+✅ **Прямая загрузка цен с Pixora API** - всегда актуальные данные  
+✅ Автоматическая загрузка при открытии страницы  
+✅ Skeleton loader во время загрузки цен  
 ✅ Отображение ценников на каждой фотографии  
 ✅ Плавающая панель покупки внизу экрана  
 ✅ Подсчет итоговой стоимости в реальном времени  
 ✅ Две кнопки покупки: выбранные фото и весь архив  
 ✅ Редирект на корзину Pixora с параметрами  
+✅ Graceful degradation при отсутствии услуг  
+
+## Архитектура
+
+### Client-Side Fetching (Прямое обращение к Pixora API)
+
+```javascript
+// Загрузка услуг напрямую с мейн-сервиса
+async loadServicesFromPixora() {
+    const mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+    const servicesUrl = `${mainApiUrl}/api/session/${this.sessionId}/services`;
+    
+    const response = await fetch(servicesUrl);
+    const data = await response.json();
+    
+    // Извлечение цен
+    const prices = this.getServicePrices(data.services);
+    this.photoPrice = prices.price_single;
+    this.priceAll = prices.price_all;
+}
+```
+
+### Mapping цен (getServicePrices)
+
+```javascript
+getServicePrices(services) {
+    // price_all: услуга с isDefault === true
+    const defaultService = services.find(s => s.isDefault === true);
+    const price_all = defaultService ? defaultService.price : 0;
+    
+    // price_single: услуга типа 'digital' или первая в списке
+    let singleService = services.find(s => 
+        s.type === 'digital' || 
+        s.name?.toLowerCase().includes('цифровая')
+    );
+    const price_single = singleService ? singleService.price : 0;
+    
+    return { price_single, price_all };
+}
+```
 
 ## Настройка
 
 ### 1. Переменные окружения (.env)
 
 ```env
+# Main Pixora API URL - используется для прямых запросов с клиента
 MAIN_API_URL=https://staging.pixorasoft.ru
 MAIN_URL=https://staging.pixorasoft.ru
 ```
 
-### 2. Структура таблицы packages (Pixora DB)
+**Важно:** URL должен быть доступен с клиента (браузера), так как запросы идут напрямую к Pixora API.
 
-```sql
-CREATE TABLE packages (
-    id SERIAL PRIMARY KEY,
-    photo_session_id UUID NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    price DECIMAL(10,2) NOT NULL,
-    is_default BOOLEAN DEFAULT FALSE,
-    type VARCHAR(50),  -- 'digital', 'archive', etc.
-    photo_count INTEGER,
-    is_active BOOLEAN DEFAULT TRUE
-);
+### 2. CORS настройки на Pixora API
+
+Убедитесь, что Pixora API разрешает CORS запросы с домена FacePass:
+
+```
+Access-Control-Allow-Origin: https://facepass.pixorasoft.ru
+Access-Control-Allow-Methods: GET, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Accept
 ```
 
-### 3. Пример данных
+### 3. Структура API ответа Pixora
 
-```sql
-INSERT INTO packages (photo_session_id, name, description, price, is_default, type, photo_count, is_active)
-VALUES 
-    ('abc-123-def', 'Цифровая копия', 'Одна фотография', 150.00, false, 'digital', 1, true),
-    ('abc-123-def', 'Весь архив', 'Все фотографии сессии', 2500.00, true, 'archive', null, true);
+**Endpoint:** `GET {MAIN_API_URL}/api/session/{sessionId}/services`
+
+**Ожидаемый формат:**
+```json
+{
+  "services": [
+    {
+      "id": 1,
+      "name": "Цифровая копия",
+      "description": "Одна фотография в цифровом формате",
+      "price": 150.0,
+      "isDefault": false,
+      "type": "digital",
+      "photoCount": 1,
+      "isActive": true
+    },
+    {
+      "id": 2,
+      "name": "Весь архив",
+      "description": "Все фотографии сессии",
+      "price": 2500.0,
+      "isDefault": true,
+      "type": "archive",
+      "photoCount": null,
+      "isActive": true
+    }
+  ]
+}
 ```
 
 ## Как это работает
 
 ### Пользовательский сценарий
 
-1. **Пользователь открывает сессию** → Автоматически загружаются услуги и цены
-2. **Загружает селфи** → Система находит похожие фото
-3. **Видит результаты** → На каждом фото отображается цена (например, "150 ₽")
-4. **Выбирает фото** → Внизу появляется панель: "Выбрано: 5, Итого: 750 ₽"
-5. **Нажимает "Купить выбранные"** → Редирект на корзину Pixora
+1. **Пользователь открывает сессию** → Показывается skeleton loader на месте цен
+2. **Загрузка услуг с Pixora API** → Прямой запрос к `{MAIN_API_URL}/api/session/{id}/services`
+3. **Цены загружены** → Skeleton заменяется на реальные ценники
+4. **Загружает селфи** → Система находит похожие фото
+5. **Видит результаты** → На каждом фото отображается цена (например, "150 ₽")
+6. **Выбирает фото** → Внизу появляется панель: "Выбрано: 5, Итого: 750 ₽"
+7. **Нажимает "Купить выбранные"** → Редирект на корзину Pixora
 
-### API Flow
+### API Flow (Client-Side)
 
 ```
-GET /api/v1/sessions/{session_id}/services
+Page Load
     ↓
-Response: {
-    "services": [
-        {"name": "Цифровая копия", "price": 150, "type": "digital"},
-        {"name": "Весь архив", "price": 2500, "isDefault": true}
-    ],
-    "mainUrl": "https://staging.pixorasoft.ru"
-}
+loadServicesFromPixora() - прямой запрос к Pixora API
     ↓
-Frontend отображает цены и кнопки покупки
+GET {MAIN_API_URL}/api/session/{sessionId}/services
+    ↓
+Response: { services: [...] }
+    ↓
+getServicePrices() - извлечение price_single и price_all
+    ↓
+updateUI() - отображение цен, показ floating bar
 ```
+
+### Skeleton Loader
+
+Во время загрузки услуг показывается анимированный placeholder:
+
+```html
+<div class="price-badge-skeleton bg-gray-300 animate-pulse rounded-full" 
+     style="width: 60px; height: 28px;">
+</div>
+```
+
+После загрузки заменяется на реальный ценник или скрывается, если услуги недоступны.
 
 ## URL для корзины
 
@@ -154,30 +230,74 @@ curl http://localhost:8000/api/v1/sessions/YOUR_SESSION_ID/services
 
 ### Ценники не отображаются
 
-**Причина:** Услуги не загрузились
+**Причина 1:** Услуги не загрузились с Pixora API
 
 **Решение:**
-1. Проверьте `/api/v1/sessions/{id}/services`
-2. Убедитесь, что таблица `packages` существует
-3. Проверьте, что есть активные услуги для сессии
+1. Откройте DevTools → Console
+2. Проверьте ошибки загрузки: `Fetching services from Pixora API`
+3. Проверьте CORS: должен быть разрешен доступ с домена FacePass
+4. Проверьте URL: `{MAIN_API_URL}/api/session/{id}/services`
+
+**Причина 2:** API вернул пустой массив услуг
+
+**Решение:**
+1. Проверьте, что услуги созданы для этой сессии в Pixora
+2. Проверьте, что `isActive = true`
+3. Проверьте формат ответа API
+
+### CORS ошибки
+
+**Симптомы:**
+```
+Access to fetch at 'https://staging.pixorasoft.ru/api/session/...' 
+from origin 'https://facepass.pixorasoft.ru' has been blocked by CORS policy
+```
+
+**Решение:**
+Настройте CORS на Pixora API:
+```python
+# В FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://facepass.pixorasoft.ru"],
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["*"],
+)
+```
+
+### Skeleton loader не исчезает
+
+**Причина:** Запрос к API завис или вернул ошибку
+
+**Решение:**
+1. Проверьте Network tab в DevTools
+2. Проверьте timeout запроса
+3. Проверьте, что `servicesLoading` меняется на `false`
 
 ### Floating bar не появляется
 
-**Причина:** `photoPrice = 0` или нет результатов поиска
+**Причина:** Одно из условий не выполнено
+
+**Проверьте:**
+```javascript
+// Условия показа floating bar:
+this.searchResults.length > 0 &&  // Есть результаты поиска
+!this.servicesLoading &&          // Услуги загружены
+this.photoPrice > 0 &&            // Есть цена для фото
+!this.servicesError               // Нет ошибки загрузки
+```
+
+### Цены не обновляются
+
+**Причина:** Кэширование браузера
 
 **Решение:**
-1. Проверьте, что услуга типа `digital` существует
-2. Проверьте console.log в браузере
-3. Убедитесь, что поиск вернул результаты
-
-### Редирект не работает
-
-**Причина:** Неверный `MAIN_URL`
-
-**Решение:**
-1. Проверьте `.env`: `MAIN_URL=https://staging.pixorasoft.ru`
-2. Перезапустите сервер
-3. Проверьте `this.mainUrl` в console
+1. Очистите кэш браузера (Ctrl+Shift+Delete)
+2. Откройте в режиме инкогнито
+3. Проверьте, что запрос идет к правильному URL
+4. Проверьте заголовки кэширования на Pixora API
 
 ## Дальнейшая разработка
 
