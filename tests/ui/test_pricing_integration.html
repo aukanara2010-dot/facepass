@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing Integration Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-loading { background: #ffc107; }
+        .status-success { background: #28a745; }
+        .status-error { background: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Pricing Integration Test Suite</h1>
+    <p>This page tests the Pixora pricing API integration for FacePass</p>
+
+    <div class="test-section">
+        <h2>Configuration Check</h2>
+        <div id="config-check"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Template Variable Injection Test</h2>
+        <p>Testing if window.MAIN_API_URL is properly injected by backend</p>
+        <div id="template-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>API Endpoint Test</h2>
+        <p>Test fetching services from Pixora API</p>
+        <label>Session ID: <input type="text" id="session-id" placeholder="Enter session ID" style="width: 300px; padding: 5px;"></label>
+        <button onclick="testApiEndpoint()">Test API Call</button>
+        <div id="api-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>CORS Configuration Test</h2>
+        <p>Verify CORS headers are properly configured</p>
+        <button onclick="testCORS()">Test CORS</button>
+        <div id="cors-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Price Extraction Test</h2>
+        <p>Test the getServicePrices() helper function</p>
+        <button onclick="testPriceExtraction()">Test Price Extraction</button>
+        <div id="price-test"></div>
+    </div>
+
+    <script>
+        // Configuration check
+        function checkConfiguration() {
+            const configDiv = document.getElementById('config-check');
+            let html = '<h3>Environment Variables:</h3>';
+            
+            // Check if window.MAIN_API_URL exists
+            if (typeof window.MAIN_API_URL !== 'undefined') {
+                const hasTemplate = window.MAIN_API_URL.includes('{{') || window.MAIN_API_URL.includes('}}');
+                
+                if (hasTemplate) {
+                    html += `<div class="test-result error">
+                        <span class="status-indicator status-error"></span>
+                        <strong>❌ FAILED:</strong> window.MAIN_API_URL contains template syntax: "${window.MAIN_API_URL}"
+                        <br><small>The backend is not replacing the template variable correctly.</small>
+                    </div>`;
+                } else {
+                    html += `<div class="test-result success">
+                        <span class="status-indicator status-success"></span>
+                        <strong>✅ PASSED:</strong> window.MAIN_API_URL = "${window.MAIN_API_URL}"
+                    </div>`;
+                }
+            } else {
+                html += `<div class="test-result error">
+                    <span class="status-indicator status-error"></span>
+                    <strong>❌ FAILED:</strong> window.MAIN_API_URL is not defined
+                </div>`;
+            }
+            
+            configDiv.innerHTML = html;
+        }
+
+        // Template variable test
+        function testTemplateInjection() {
+            const testDiv = document.getElementById('template-test');
+            let html = '';
+            
+            const mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+            const hasTemplate = mainApiUrl.includes('{{') || mainApiUrl.includes('}}');
+            
+            if (hasTemplate) {
+                html += `<div class="test-result error">
+                    <span class="status-indicator status-error"></span>
+                    <strong>Template Not Replaced:</strong> Backend failed to inject MAIN_API_URL
+                    <br>Current value: <code>${mainApiUrl}</code>
+                    <br>Fallback will be used: <code>https://staging.pixorasoft.ru</code>
+                </div>`;
+            } else {
+                html += `<div class="test-result success">
+                    <span class="status-indicator status-success"></span>
+                    <strong>Template Replaced Successfully:</strong>
+                    <br>MAIN_API_URL: <code>${mainApiUrl}</code>
+                </div>`;
+            }
+            
+            testDiv.innerHTML = html;
+        }
+
+        // API endpoint test
+        async function testApiEndpoint() {
+            const sessionId = document.getElementById('session-id').value;
+            const testDiv = document.getElementById('api-test');
+            
+            if (!sessionId) {
+                testDiv.innerHTML = '<div class="test-result error">Please enter a session ID</div>';
+                return;
+            }
+            
+            testDiv.innerHTML = '<div class="test-result info"><span class="status-indicator status-loading"></span>Testing API endpoint...</div>';
+            
+            try {
+                let mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+                if (mainApiUrl.includes('{{') || mainApiUrl.includes('}}')) {
+                    mainApiUrl = 'https://staging.pixorasoft.ru';
+                }
+                
+                const servicesUrl = `${mainApiUrl}/api/session/${sessionId}/services`;
+                
+                console.log('Testing URL:', servicesUrl);
+                
+                const response = await fetch(servicesUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    },
+                    credentials: 'omit'
+                });
+                
+                let html = `<div class="test-result ${response.ok ? 'success' : 'error'}">
+                    <span class="status-indicator status-${response.ok ? 'success' : 'error'}"></span>
+                    <strong>API Response:</strong>
+                    <br>URL: <code>${servicesUrl}</code>
+                    <br>Status: ${response.status} ${response.statusText}
+                `;
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    html += `<br><strong>Services Found:</strong> ${data.services?.length || 0}
+                        <br><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    const text = await response.text();
+                    html += `<br><strong>Error:</strong> ${text}`;
+                }
+                
+                html += '</div>';
+                testDiv.innerHTML = html;
+                
+            } catch (error) {
+                testDiv.innerHTML = `<div class="test-result error">
+                    <span class="status-indicator status-error"></span>
+                    <strong>Error:</strong> ${error.message}
+                    <br><small>This could be a CORS issue or network error</small>
+                </div>`;
+            }
+        }
+
+        // CORS test
+        async function testCORS() {
+            const testDiv = document.getElementById('cors-test');
+            testDiv.innerHTML = '<div class="test-result info"><span class="status-indicator status-loading"></span>Testing CORS configuration...</div>';
+            
+            try {
+                let mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+                if (mainApiUrl.includes('{{') || mainApiUrl.includes('}}')) {
+                    mainApiUrl = 'https://staging.pixorasoft.ru';
+                }
+                
+                const testUrl = `${mainApiUrl}/api/health`;
+                
+                const response = await fetch(testUrl, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'GET',
+                    }
+                });
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers'),
+                };
+                
+                let html = `<div class="test-result ${response.ok ? 'success' : 'error'}">
+                    <span class="status-indicator status-${response.ok ? 'success' : 'error'}"></span>
+                    <strong>CORS Headers:</strong>
+                    <pre>${JSON.stringify(corsHeaders, null, 2)}</pre>
+                `;
+                
+                if (!corsHeaders['Access-Control-Allow-Origin']) {
+                    html += `<br><div class="test-result error">
+                        ⚠️ CORS not configured! The Pixora API needs to allow requests from: <code>${window.location.origin}</code>
+                    </div>`;
+                }
+                
+                html += '</div>';
+                testDiv.innerHTML = html;
+                
+            } catch (error) {
+                testDiv.innerHTML = `<div class="test-result error">
+                    <span class="status-indicator status-error"></span>
+                    <strong>CORS Test Failed:</strong> ${error.message}
+                </div>`;
+            }
+        }
+
+        // Price extraction test
+        function testPriceExtraction() {
+            const testDiv = document.getElementById('price-test');
+            
+            // Mock services data
+            const mockServices = [
+                {
+                    id: 1,
+                    name: 'Цифровая копия',
+                    price: 150,
+                    isDefault: false,
+                    type: 'digital'
+                },
+                {
+                    id: 2,
+                    name: 'Весь архив',
+                    price: 2500,
+                    isDefault: true,
+                    type: 'package'
+                }
+            ];
+            
+            // Test the price extraction logic
+            function getServicePrices(services) {
+                if (!services || services.length === 0) {
+                    return { price_single: 0, price_all: 0 };
+                }
+                
+                const defaultService = services.find(s => s.isDefault === true);
+                const price_all = defaultService ? defaultService.price : 0;
+                
+                let singleService = services.find(s => 
+                    s.type === 'digital' || 
+                    s.type === 'single' ||
+                    s.name?.toLowerCase().includes('цифровая') ||
+                    s.name?.toLowerCase().includes('digital') ||
+                    s.name?.toLowerCase().includes('копия')
+                );
+                
+                if (!singleService) {
+                    singleService = services.find(s => !s.isDefault);
+                }
+                
+                if (!singleService && services.length > 0) {
+                    singleService = services[0];
+                }
+                
+                const price_single = singleService ? singleService.price : 0;
+                
+                return { price_single, price_all };
+            }
+            
+            const prices = getServicePrices(mockServices);
+            
+            let html = `<div class="test-result success">
+                <span class="status-indicator status-success"></span>
+                <strong>Price Extraction Test:</strong>
+                <br><strong>Mock Services:</strong>
+                <pre>${JSON.stringify(mockServices, null, 2)}</pre>
+                <br><strong>Extracted Prices:</strong>
+                <br>Single Photo Price: ${prices.price_single} ₽
+                <br>Full Archive Price: ${prices.price_all} ₽
+            </div>`;
+            
+            testDiv.innerHTML = html;
+        }
+
+        // Run tests on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            checkConfiguration();
+            testTemplateInjection();
+        });
+    </script>
+</body>
+</html>

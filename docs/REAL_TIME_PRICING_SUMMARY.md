@@ -168,6 +168,31 @@ app.add_middleware(
 
 ## 🧪 Тестирование
 
+### 0. Проверка Template Variable Injection
+
+**Важно!** Убедитесь, что `window.MAIN_API_URL` правильно подставляется backend'ом:
+
+```javascript
+// Откройте DevTools → Console на странице сессии
+console.log(window.MAIN_API_URL);
+// Должно быть: "https://staging.pixorasoft.ru"
+// НЕ должно быть: "{{ MAIN_API_URL }}"
+```
+
+**Если видите `{{ MAIN_API_URL }}`:**
+- Backend не заменяет template variable
+- Проверьте `app/api/v1/endpoints/sessions.py` (строки 265-285)
+- Проверьте логи сервера на наличие warnings
+
+**Fallback механизм:**
+JavaScript автоматически использует fallback если template не заменен:
+```javascript
+let mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+if (mainApiUrl.includes('{{') || mainApiUrl.includes('}}')) {
+    mainApiUrl = 'https://staging.pixorasoft.ru';
+}
+```
+
 ### 1. Проверка загрузки услуг
 
 ```bash
@@ -196,6 +221,35 @@ curl -I -X OPTIONS \
 6. Проверьте floating bar
 
 ## 🚨 Важные моменты
+
+### Template Variable Injection
+
+Backend должен заменять `{{ MAIN_API_URL }}` в HTML на реальное значение из `.env`:
+
+**Файл:** `app/api/v1/endpoints/sessions.py` (строки 265-285)
+```python
+# Inject MAIN_API_URL from settings
+main_api_url = settings.MAIN_API_URL
+
+# Replace all possible template variations
+replacements = [
+    ("'{{ MAIN_API_URL }}'", f"'{main_api_url}'"),
+    ('"{{ MAIN_API_URL }}"', f'"{main_api_url}"'),
+    ('{{ MAIN_API_URL }}', main_api_url),
+]
+
+for old, new in replacements:
+    if old in html_content:
+        html_content = html_content.replace(old, new)
+        logger.info(f"Replaced '{old}' with '{new}'")
+```
+
+**Проверка:** Откройте исходный код страницы (Ctrl+U) и найдите `window.MAIN_API_URL`. Должно быть:
+```html
+<script>
+    window.MAIN_API_URL = "https://staging.pixorasoft.ru";
+</script>
+```
 
 ### CORS обязателен!
 
