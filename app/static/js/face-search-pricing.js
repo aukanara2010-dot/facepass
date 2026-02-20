@@ -156,18 +156,22 @@ class FacePassSession {
         this.servicesError = false;
         
         try {
-            // Get MAIN_API_URL from environment or use default
-            // Check if template variable wasn't replaced (contains {{ }})
-            let mainApiUrl = window.MAIN_API_URL || 'https://staging.pixorasoft.ru';
+            // Get MAIN_API_URL from environment or use hardcoded fallback
+            // Check if template variable wasn't replaced (contains {{ or }})
+            let mainApiUrl = window.MAIN_API_URL && 
+                            !window.MAIN_API_URL.includes('{{') && 
+                            !window.MAIN_API_URL.includes('}}')
+                ? window.MAIN_API_URL 
+                : 'https://staging.pixorasoft.ru';
             
-            if (mainApiUrl.includes('{{') || mainApiUrl.includes('}}')) {
-                console.warn('MAIN_API_URL not properly injected, using default');
-                mainApiUrl = 'https://staging.pixorasoft.ru';
-            }
+            // Ensure URL doesn't have trailing slash and starts with http
+            mainApiUrl = mainApiUrl.replace(/\/$/, '');
             
-            // Construct correct API path
+            // Construct correct API path - ensure it's absolute URL
             const servicesUrl = `${mainApiUrl}/api/session/${this.sessionId}/services`;
             
+            console.log('MAIN_API_URL from window:', window.MAIN_API_URL);
+            console.log('Using API URL:', mainApiUrl);
             console.log('Fetching services from Pixora API:', servicesUrl);
             
             const response = await fetch(servicesUrl, {

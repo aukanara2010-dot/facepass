@@ -263,14 +263,19 @@ async def session_interface(
         )
         
         # Inject MAIN_API_URL from settings
-        # More robust replacement - handle both quoted and unquoted templates
+        # Handle all possible template variations (with and without spaces)
         main_api_url = settings.MAIN_API_URL
         
         # Replace all possible template variations
         replacements = [
+            # With spaces
             ("'{{ MAIN_API_URL }}'", f"'{main_api_url}'"),
             ('"{{ MAIN_API_URL }}"', f'"{main_api_url}"'),
             ('{{ MAIN_API_URL }}', main_api_url),
+            # Without spaces
+            ("'{{MAIN_API_URL}}'", f"'{main_api_url}'"),
+            ('"{{MAIN_API_URL}}"', f'"{main_api_url}"'),
+            ('{{MAIN_API_URL}}', main_api_url),
         ]
         
         replaced = False
@@ -285,7 +290,7 @@ async def session_interface(
             # Log a snippet to debug
             if 'window.MAIN_API_URL' in html_content:
                 start = html_content.find('window.MAIN_API_URL')
-                snippet = html_content[start:start+100]
+                snippet = html_content[start:start+150]
                 logger.warning(f"Found window.MAIN_API_URL: {snippet}")
         
         logger.info(f"Serving interface for session {session_id} with MAIN_API_URL: {main_api_url}")
