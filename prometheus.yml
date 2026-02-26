@@ -1,0 +1,19 @@
+# Prometheus configuration for FacePass microservice
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    service: 'facepass'
+    environment: 'production'
+
+scrape_configs:
+  - job_name: 'facepass'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/api/v1/metrics'
+    static_configs:
+      - targets: ['app:8000']
+        labels:
+          instance: 'facepass-app'
+          service: 'face-recognition'

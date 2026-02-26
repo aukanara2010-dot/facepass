@@ -1,12 +1,12 @@
 """
-Configuration management module for Fecapass application.
+Configuration management module for FacePass application.
 
 This module provides centralized configuration management using pydantic-settings
 for loading and validating environment variables from .env file.
 """
 
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,26 +22,15 @@ class Settings(BaseSettings):
     
     # Application Settings
     APP_NAME: str = "FacePass"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
     
-    # Domain configuration
-    DOMAIN: str = "facepass.pixorasoft.ru"
-    STAGING_DOMAIN: str = "staging.pixorasoft.ru"
-    MAIN_API_URL: str = "https://staging.pixorasoft.ru"
-    MAIN_URL: str = "https://staging.pixorasoft.ru"
-    
-    # Database - Main (Required fields)
+    # Database - PostgreSQL with pgvector (Required fields)
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
-    MAIN_DB_HOST: str = "db_main"
-    MAIN_DB_PORT: int = 5432
-    
-    # Database - Vector (Required fields)
-    VECTOR_DB_HOST: str = "db_vector"
-    VECTOR_DB_PORT: int = 5432
-    VECTOR_POSTGRES_DB: str
+    POSTGRES_HOST: str = "db_vector"
+    POSTGRES_PORT: int = 5432
     
     # Redis (Default values provided)
     REDIS_HOST: str = "redis"
@@ -59,8 +48,17 @@ class Settings(BaseSettings):
     S3_BUCKET: str
     S3_REGION: str = "ru-1"
     
-    # External Pixora Database
-    MAIN_APP_DATABASE_URL: str
+    # API Authentication
+    API_KEYS: str = Field(
+        default="",
+        description="Comma-separated list of valid API keys for authentication"
+    )
+    
+    # CORS Configuration
+    CORS_ORIGINS: str = Field(
+        default="http://localhost:3000,http://localhost:8000",
+        description="Comma-separated list of allowed CORS origins"
+    )
     
     # Face Recognition Settings (Default values provided)
     FACE_DETECTION_THRESHOLD: float = Field(default=0.6, ge=0.0, le=1.0)
@@ -90,20 +88,7 @@ class Settings(BaseSettings):
         return v
     
     @property
-    def main_database_url(self) -> str:
-        """
-        Construct PostgreSQL connection URL for main database.
-        
-        Returns:
-            str: SQLAlchemy-compatible database URL
-        """
-        return (
-            f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.MAIN_DB_HOST}:{self.MAIN_DB_PORT}/{self.POSTGRES_DB}"
-        )
-    
-    @property
-    def vector_database_url(self) -> str:
+    def database_url(self) -> str:
         """
         Construct PostgreSQL connection URL for vector database.
         
@@ -112,7 +97,7 @@ class Settings(BaseSettings):
         """
         return (
             f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.VECTOR_DB_HOST}:{self.VECTOR_DB_PORT}/{self.VECTOR_POSTGRES_DB}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
     
     @property
@@ -142,6 +127,28 @@ class Settings(BaseSettings):
             str: Celery result backend URL
         """
         return self.CELERY_RESULT_BACKEND or self.redis_url
+    
+    def get_api_keys(self) -> List[str]:
+        """
+        Get list of valid API keys from comma-separated string.
+        
+        Returns:
+            List[str]: List of valid API keys
+        """
+        if not self.API_KEYS:
+            return []
+        return [key.strip() for key in self.API_KEYS.split(",") if key.strip()]
+    
+    def get_cors_origins(self) -> List[str]:
+        """
+        Get list of allowed CORS origins from comma-separated string.
+        
+        Returns:
+            List[str]: List of allowed CORS origins
+        """
+        if not self.CORS_ORIGINS:
+            return []
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
 
 @lru_cache()

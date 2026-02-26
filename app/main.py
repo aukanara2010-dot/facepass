@@ -4,49 +4,96 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse
 from app.api.v1.router import api_router
 import asyncio
-import httpx
+import logging
+import structlog
+import time
 
 # Import models to ensure they are registered with Base
-from models.event import Event
-from models.face import Face, FaceEmbedding
-from core.database import Base, main_engine, vector_engine
+from models.face import FaceEmbedding
+from core.database import Base, engine
+
+# Configure structured logging
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
+# Get structured logger
+logger = structlog.get_logger()
 
 # Create tables if they don't exist
 try:
-    # Create main database tables
-    Base.metadata.create_all(bind=main_engine, tables=[Event.__table__, Face.__table__])
-    print("✅ Main database tables created/verified")
-    
     # Create vector database tables
-    Base.metadata.create_all(bind=vector_engine, tables=[FaceEmbedding.__table__])
-    print("✅ Vector database tables created/verified")
+    Base.metadata.create_all(bind=engine, tables=[FaceEmbedding.__table__])
+    logger.info("database_tables_created", status="success")
     
 except Exception as e:
-    print(f"⚠️ Database table creation warning: {str(e)}")
+    logger.warning("database_table_creation_warning", error=str(e))
 
-# Increase timeout for long-running operations like photo indexing
-# This is especially important for the first-time indexing of large photo sessions
-asyncio.get_event_loop().set_debug(False)
-
+# Create FastAPI app
 app = FastAPI(
-    title="Fecapass",
-    version="1.0.0",
-    description="Face recognition service with Docker architecture"
+    title="FacePass",
+    version="2.0.0",
+    description="Isolated face recognition microservice with vector search"
 )
 
-# CORS middleware
+# Store startup time for uptime calculation
+app.state.startup_time = time.time()
+
+# Setup rate limiting
+from app.middleware.rate_limit import setup_rate_limiting
+setup_rate_limiting(app)
+
+# Startup event to initialize face recognition service
+@app.on_event("startup")
+async def startup_event():
+    """
+    Initialize services on application startup.
+    
+    This ensures the FaceAnalysis model is loaded once at startup
+    and reused throughout the application lifecycle.
+    """
+    logger.info("server_startup", status="initializing")
+    
+    try:
+        # Initialize face recognition service (singleton)
+        from services.face_recognition import get_face_recognition_service
+        
+        logger.info("loading_insightface_model")
+        face_service = get_face_recognition_service()
+        
+        if face_service.initialized:
+            logger.info("insightface_model_loaded", status="success")
+        else:
+            logger.warning("insightface_not_initialized", status="warning")
+    
+    except Exception as e:
+        logger.error("face_recognition_initialization_error", error=str(e), exc_info=True)
+    
+    logger.info("server_startup_complete", status="running")
+
+# CORS middleware - configurable via environment variables
+from core.config import get_settings
+settings = get_settings()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://facepass.pixorasoft.ru",
-        "https://staging.pixorasoft.ru",
-        "https://pixorasoft.ru",
-        "http://localhost:3000",  # For local development
-        "http://localhost:8000",
-    ],
+    allow_origins=settings.get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-API-Key"],
 )
 
 # Custom middleware for handling long-running operations and permissions
@@ -77,6 +124,53 @@ async def add_security_headers(request, call_next):
     response.headers["Content-Security-Policy"] = csp
     
     return response
+
+@app.middleware("http")
+async def request_logging_middleware(request, call_next):
+    """
+    Log all API requests with structured logging.
+    
+    Logs request details, response status, and execution time.
+    """
+    start_time = time.time()
+    
+    # Log request
+    logger.info(
+        "request_started",
+        method=request.method,
+        path=request.url.path,
+        client_ip=request.client.host if request.client else None
+    )
+    
+    try:
+        response = await call_next(request)
+        
+        # Calculate duration
+        duration_ms = (time.time() - start_time) * 1000
+        
+        # Log response
+        logger.info(
+            "request_completed",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round(duration_ms, 2)
+        )
+        
+        return response
+        
+    except Exception as e:
+        # Log error
+        duration_ms = (time.time() - start_time) * 1000
+        logger.error(
+            "request_failed",
+            method=request.method,
+            path=request.url.path,
+            error=str(e),
+            duration_ms=round(duration_ms, 2),
+            exc_info=True
+        )
+        raise
 @app.middleware("http")
 async def timeout_middleware(request, call_next):
     """
@@ -169,234 +263,8 @@ async def sitemap_xml():
     </url>
 </urlset>"""
 
-# Proxy endpoint for Pixora services to bypass CORS
-@app.get("/api/v1/remote-services/{session_id}")
-async def get_remote_services(session_id: str):
-    """
-    Proxy endpoint to fetch services from Pixora API.
-    
-    This endpoint bypasses CORS issues by making server-to-server requests
-    to the Pixora API and returning the JSON response to the frontend.
-    
-    Args:
-        session_id (str): The photo session UUID
-        
-    Returns:
-        JSON: Services and pricing information from Pixora API
-        
-    Raises:
-        HTTPException: If Pixora API is unreachable or returns an error
-    """
-    from fastapi import HTTPException
-    from core.config import get_settings
-    import logging
-    
-    logger = logging.getLogger(__name__)
-    settings = get_settings()
-    
-    # Construct Pixora API URL
-    pixora_url = f"{settings.MAIN_API_URL}/api/session/{session_id}/services"
-    
-    try:
-        logger.info(f"Proxying request to Pixora API: {pixora_url}")
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(pixora_url)
-            
-            if response.status_code == 200:
-                logger.info(f"Successfully fetched services for session {session_id}")
-                return response.json()
-            elif response.status_code == 404:
-                logger.warning(f"Session {session_id} not found in Pixora API")
-                raise HTTPException(
-                    status_code=404,
-                    detail={
-                        "error": "Session not found",
-                        "message": f"Session {session_id} not found in Pixora API",
-                        "session_id": session_id
-                    }
-                )
-            else:
-                logger.error(f"Pixora API returned {response.status_code}: {response.text}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail={
-                        "error": "Pixora API error",
-                        "message": f"Pixora API returned status {response.status_code}",
-                        "pixora_response": response.text[:500]  # Limit response size
-                    }
-                )
-                
-    except httpx.TimeoutException:
-        logger.error(f"Timeout while fetching services from Pixora API: {pixora_url}")
-        raise HTTPException(
-            status_code=408,
-            detail={
-                "error": "Request timeout",
-                "message": "Pixora API did not respond within 30 seconds",
-                "suggestion": "Try again later or contact support"
-            }
-        )
-    except httpx.RequestError as e:
-        logger.error(f"Network error while fetching services from Pixora API: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "Network error",
-                "message": "Unable to connect to Pixora API",
-                "suggestion": "Check your internet connection or try again later"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error while fetching services: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching services",
-                "suggestion": "Contact support if the issue persists"
-            }
-        )
-
-
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
-
-
-# Public session route for beautiful URLs
-@app.get("/session/{session_id}")
-async def public_session_interface(session_id: str):
-    """
-    Public route for FacePass session interface.
-    
-    This provides a beautiful URL: https://facepass.pixorasoft.ru/session/{session_id}
-    instead of the API path /api/v1/sessions/{session_id}/interface
-    """
-    from fastapi import Request, Depends
-    from fastapi.responses import HTMLResponse
-    from sqlalchemy.orm import Session
-    from core.database import get_pixora_db
-    from models.photo_session import PhotoSession
-    import os
-    
-    # Validate session first
-    pixora_db = next(get_pixora_db())
-    try:
-        session = pixora_db.query(PhotoSession).filter(
-            PhotoSession.id == session_id
-        ).first()
-        
-        if not session:
-            return HTMLResponse(
-                content=f"""
-                <!DOCTYPE html>
-                <html lang="ru">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Сессия не найдена - FacePass</title>
-                    <script src="https://cdn.tailwindcss.com"></script>
-                </head>
-                <body class="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
-                    <div class="bg-white rounded-2xl p-8 text-center max-w-md mx-4">
-                        <div class="text-6xl mb-4">❌</div>
-                        <h1 class="text-2xl font-bold text-gray-800 mb-4">Сессия не найдена</h1>
-                        <p class="text-gray-600 mb-6">Сессия с ID {session_id} не существует или была удалена.</p>
-                        <a href="https://pixorasoft.ru" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors">
-                            Вернуться на главную
-                        </a>
-                    </div>
-                </body>
-                </html>
-                """,
-                status_code=404
-            )
-        
-        if not session.is_facepass_active():
-            return HTMLResponse(
-                content=f"""
-                <!DOCTYPE html>
-                <html lang="ru">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>FacePass не активен - {session.name}</title>
-                    <script src="https://cdn.tailwindcss.com"></script>
-                </head>
-                <body class="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
-                    <div class="bg-white rounded-2xl p-8 text-center max-w-md mx-4">
-                        <div class="text-6xl mb-4">⚠️</div>
-                        <h1 class="text-2xl font-bold text-gray-800 mb-4">FacePass не активен</h1>
-                        <p class="text-gray-600 mb-2">FacePass не включен для сессии:</p>
-                        <p class="font-semibold text-gray-800 mb-6">"{session.name}"</p>
-                        <p class="text-sm text-gray-500 mb-6">Обратитесь к фотографу для активации FacePass.</p>
-                        <a href="https://pixorasoft.ru" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors">
-                            Вернуться на главную
-                        </a>
-                    </div>
-                </body>
-                </html>
-                """,
-                status_code=403
-            )
-        
-        # Read and serve the HTML file with session data injection
-        html_path = os.path.join("app", "static", "session", "index.html")
-        
-        if not os.path.exists(html_path):
-            return HTMLResponse(
-                content="<h1>Interface file not found</h1>",
-                status_code=500
-            )
-        
-        with open(html_path, "r", encoding="utf-8") as f:
-            html_content = f.read()
-        
-        # Inject session data into HTML
-        html_content = html_content.replace(
-            '<title>FacePass - Поиск фотографий</title>',
-            f'<title>Найти фото - {session.name} | FacePass</title>'
-        )
-        
-        # Inject session ID into JavaScript (remove the old method)
-        # Update title and meta tags
-        html_content = html_content.replace(
-            '<title>FacePass - Поиск фотографий</title>',
-            f'<title>Найти фото - {session.name} | FacePass</title>'
-        )
-        
-        # Inject OpenGraph and meta tags
-        html_content = html_content.replace(
-            '<meta name="description" content="Сделайте селфи, и наш AI покажет все ваши фотографии с фотосессии. Быстро, точно, удобно.">',
-            f'''<meta name="description" content="Найдите свои фотографии с фотосессии '{session.name}' с помощью технологии распознавания лиц FacePass от Pixora">
-    
-    <!-- OpenGraph Meta Tags -->
-    <meta property="og:title" content="Найти фото - {session.name} | FacePass">
-    <meta property="og:description" content="Найдите свои фотографии с фотосессии '{session.name}' с помощью технологии распознавания лиц FacePass">
-    <meta property="og:image" content="https://facepass.pixorasoft.ru/static/images/facepass-logo.svg">
-    <meta property="og:url" content="https://facepass.pixorasoft.ru/session/{session_id}">
-    <meta property="og:type" content="website">
-    <meta property="og:site_name" content="FacePass by Pixora">
-    
-    <!-- Twitter Card Meta Tags -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Найти фото - {session.name} | FacePass">
-    <meta name="twitter:description" content="Найдите свои фотографии с фотосессии '{session.name}' с помощью технологии распознавания лиц FacePass">
-    <meta name="twitter:image" content="https://facepass.pixorasoft.ru/static/images/facepass-logo.svg">
-    
-    <!-- Additional Meta Tags -->
-    <meta name="keywords" content="фотосессия, поиск фото, распознавание лиц, FacePass, Pixora, {session.name}">
-    <meta name="author" content="Pixora">
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="/static/images/facepass-logo.svg">
-    <link rel="apple-touch-icon" href="/static/images/facepass-logo.svg">'''
-        )
-        
-        return HTMLResponse(content=html_content)
-        
-    finally:
-        pixora_db.close()
 
 
 @app.get("/")

@@ -1,306 +1,416 @@
-# FacePass - AI-Powered Photo Recognition System
+# FacePass v2.0 - Isolated Face Recognition Microservice
 
-FacePass - это система распознавания лиц для автоматического поиска фотографий клиентов на фотосессиях. Система построена на FastAPI, PostgreSQL с pgvector, Redis и Celery.
+FacePass - автономный микросервис распознавания лиц с векторным поиском на базе PostgreSQL + pgvector и InsightFace.
 
-## 🚀 Возможности
+## 🎯 Описание
 
-- **Поиск по селфи**: Клиенты загружают селфи и находят все свои фотографии
-- **Автоматическая индексация**: Система автоматически обрабатывает новые фотографии
-- **Высокая точность**: Использует InsightFace с моделью buffalo_l
-- **Интеграция с Pixora**: Работает с существующей системой управления фотостудиями
-- **Современный UI**: Интуитивный интерфейс в стиле super.photo
+FacePass v2.0 - это полностью изолированный микросервис для индексации и поиска лиц на фотографиях. Сервис работает только с `photo_id` и векторными представлениями лиц, предоставляя чистый REST API для интеграции.
 
-## 📁 Структура проекта
+### Ключевые возможности
+
+- ✅ Извлечение face embeddings с помощью InsightFace
+- ✅ Векторный поиск с использованием pgvector (cosine similarity)
+- ✅ Batch индексация для высокой производительности
+- ✅ API Key authentication для защищенных endpoints
+- ✅ Rate limiting (100 req/min для индексации, 1000 req/min для поиска)
+- ✅ Structured logging (JSON format)
+- ✅ Health checks и Prometheus metrics
+- ✅ Input validation и security headers
+- ✅ Идемпотентные операции
+
+## 🏗️ Архитектура
 
 ```
-facepass/
-├── app/                    # FastAPI приложение
-│   ├── api/               # API эндпоинты
-│   ├── static/            # Статические файлы (HTML, JS, CSS)
-│   └── schemas/           # Pydantic схемы
-├── core/                  # Основные компоненты
-│   ├── config.py         # Конфигурация
-│   ├── database.py       # Подключения к БД
-│   └── s3.py            # S3 клиент
-├── models/               # SQLAlchemy модели
-├── services/             # Бизнес-логика
-│   ├── face_recognition.py  # Распознавание лиц
-│   └── photo_indexing.py   # Индексация фотографий
-├── workers/              # Celery задачи
-├── scripts/              # Скрипты инициализации и миграции
-├── tests/                # Тесты
-│   ├── unit/            # Юнит-тесты
-│   ├── integration/     # Интеграционные тесты
-│   ├── manual/          # Ручные тесты и диагностика
-│   └── property/        # Property-based тесты
-└── docs/                 # Документация
-    ├── api/             # API документация
-    ├── deployment/      # Руководства по развертыванию
-    ├── fixes/           # Документация исправлений
-    └── guides/          # Руководства пользователя
+┌─────────────────────────────────────┐
+│         FacePass v2.0               │
+│                                     │
+│  ✅ Face embedding extraction       │
+│  ✅ Vector storage (pgvector)       │
+│  ✅ Similarity search               │
+│  ✅ API для индексации              │
+│  ✅ API для поиска                  │
+│  ✅ API Key authentication          │
+│  ✅ Observability (metrics, logs)   │
+└─────────────────────────────────────┘
 ```
 
-## 🛠 Технологии
+### Технологический стек
 
-- **Backend**: FastAPI, SQLAlchemy, PostgreSQL + pgvector
-- **AI/ML**: InsightFace (buffalo_l), NumPy
-- **Storage**: Beget S3
-- **Frontend**: Vanilla JS, Tailwind CSS
-- **Queue**: Celery + Redis
-- **Database**: PostgreSQL с расширением pgvector
+- **Backend**: Python 3.11, FastAPI
+- **Database**: PostgreSQL 16 + pgvector
+- **Face Recognition**: InsightFace (buffalo_l model)
+- **Cache**: Redis 7
+- **Monitoring**: Prometheus
+- **Deployment**: Docker, Docker Compose
 
-## 📚 Документация
+## 🚀 Быстрый старт
 
-Вся документация находится в папке [`docs/`](docs/):
+### Требования
 
-- **[API документация](docs/api/)** - Описание всех эндпоинтов
-- **[Руководства](docs/guides/)** - Гайды по использованию и настройке
-- **[Исправления](docs/fixes/)** - Документация по багфиксам
-- **[Развертывание](docs/deployment/)** - Инструкции по деплою
+- Docker и Docker Compose
+- 4GB+ RAM
+- 10GB+ свободного места
+
+### Установка
+
+1. Клонируйте репозиторий:
+```bash
+git clone <repository-url>
+cd facepass
+```
+
+2. Создайте `.env` файл:
+```bash
+cp .env.example .env
+```
+
+3. Настройте переменные окружения в `.env`:
+```env
+# Application
+APP_NAME=FacePass
+APP_VERSION=2.0.0
+DEBUG=False
+
+# Database
+POSTGRES_USER=facepass_user
+POSTGRES_PASSWORD=your_secure_password
+POSTGRES_DB=facepass_vector
+POSTGRES_HOST=db_vector
+POSTGRES_PORT=5432
+
+# S3 Storage
+S3_ENDPOINT=https://s3.beget.com
+S3_ACCESS_KEY=your_access_key
+S3_SECRET_KEY=your_secret_key
+S3_BUCKET=facepass-images
+S3_REGION=ru-1
+
+# Security
+API_KEYS=key1_abc123,key2_def456,key3_ghi789
+CORS_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+
+# Face Recognition
+FACE_SIMILARITY_THRESHOLD=0.5
+FACE_DETECTION_THRESHOLD=0.6
+EMBEDDING_DIMENSION=512
+```
+
+4. Запустите сервисы:
+```bash
+docker-compose up -d
+```
+
+5. Проверьте health:
+```bash
+curl http://localhost:8000/api/v1/health
+```
+
+## 📋 API Endpoints
+
+### Protected Endpoints (требуют X-API-Key)
+
+#### POST /api/v1/index
+Индексация одного фото.
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/index" \
+  -H "X-API-Key: your-api-key" \
+  -F "photo_id=photo123" \
+  -F "session_id=session-uuid" \
+  -F "file=@photo.jpg"
+```
+
+**Response:**
+```json
+{
+  "indexed": true,
+  "photo_id": "photo123",
+  "confidence": 0.98,
+  "faces_detected": 1
+}
+```
+
+#### POST /api/v1/index/batch
+Batch индексация нескольких фото.
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/index/batch" \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "session-uuid",
+    "photos": [
+      {"photo_id": "photo1", "s3_key": "sessions/uuid/photo1.jpg"},
+      {"photo_id": "photo2", "s3_key": "sessions/uuid/photo2.jpg"}
+    ]
+  }'
+```
+
+**Response:**
+```json
+{
+  "indexed": 98,
+  "failed": 2,
+  "total": 100,
+  "errors": ["photo3.jpg: No face detected"]
+}
+```
+
+#### DELETE /api/v1/index/{session_id}
+Удаление всех embeddings для сессии.
+
+```bash
+curl -X DELETE "http://localhost:8000/api/v1/index/session-uuid" \
+  -H "X-API-Key: your-api-key"
+```
+
+### Public Endpoints
+
+#### POST /api/v1/search
+Поиск похожих лиц.
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/search" \
+  -F "session_id=session-uuid" \
+  -F "file=@selfie.jpg" \
+  -F "threshold=0.7" \
+  -F "limit=100"
+```
+
+**Response:**
+```json
+{
+  "matches": [
+    {"photo_id": "photo1", "similarity": 0.95, "confidence": 0.98},
+    {"photo_id": "photo5", "similarity": 0.87, "confidence": 0.96}
+  ],
+  "query_time_ms": 123.45,
+  "total_matches": 2,
+  "indexed_photos": 98
+}
+```
+
+#### GET /api/v1/search/status/{session_id}
+Проверка статуса индексации.
+
+```bash
+curl "http://localhost:8000/api/v1/search/status/session-uuid"
+```
+
+**Response:**
+```json
+{
+  "indexed": true,
+  "session_id": "session-uuid",
+  "photo_count": 98,
+  "last_indexed": "2024-02-26T10:30:00Z"
+}
+```
+
+#### GET /api/v1/health
+Health check endpoint.
+
+```bash
+curl "http://localhost:8000/api/v1/health"
+```
+
+#### GET /api/v1/metrics
+Prometheus metrics.
+
+```bash
+curl "http://localhost:8000/api/v1/metrics"
+```
+
+## 📊 Monitoring
+
+### Prometheus
+
+Prometheus доступен по адресу: `http://localhost:9090`
+
+Метрики:
+- `search_requests_total` - количество поисковых запросов
+- `search_duration_seconds` - длительность поиска
+- `index_requests_total` - количество запросов индексации
+- `index_duration_seconds` - длительность индексации
+- `embeddings_total` - общее количество embeddings
+- `db_connections_active` - активные подключения к БД
+
+### Logs
+
+Просмотр логов:
+```bash
+docker-compose logs -f app
+```
+
+Логи в JSON формате с structured logging.
+
+## 🔒 Безопасность
+
+### API Key Authentication
+
+Защищенные endpoints требуют `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: your-api-key" ...
+```
+
+Настройка в `.env`:
+```env
+API_KEYS=key1,key2,key3
+```
+
+### Rate Limiting
+
+- Indexing endpoints: 100 requests/minute per API key
+- Search endpoints: 1000 requests/minute per IP
+
+### Input Validation
+
+- File size limit: 10MB
+- Image dimensions: 10x10 min, 4096x4096 max
+- Allowed formats: JPEG, PNG, WebP, HEIC
+- SQL injection prevention
+- Parameter validation (Pydantic)
+
+## 🗄️ Database Migration
+
+### Миграция на v2.0
+
+1. Создайте backup:
+```bash
+./scripts/backup_database.sh
+```
+
+2. Выполните миграцию:
+```bash
+docker-compose exec db_vector psql -U facepass_user -d facepass_vector -f /code/scripts/migration_v2.sql
+```
+
+3. Проверьте результат:
+```bash
+docker-compose exec db_vector psql -U facepass_user -d facepass_vector -c "\d face_embeddings"
+```
+
+### Rollback
+
+```bash
+docker-compose exec db_vector psql -U facepass_user -d facepass_vector -f /code/scripts/rollback_v2.sql
+```
 
 ## 🧪 Тестирование
 
-Тесты организованы в папке [`tests/`](tests/):
+### Manual Testing
 
 ```bash
-# Все тесты
-pytest
+# Health check
+curl http://localhost:8000/api/v1/health
 
-# Юнит-тесты
-pytest tests/unit/
+# Index test photo
+curl -X POST "http://localhost:8000/api/v1/index" \
+  -H "X-API-Key: test-key" \
+  -F "photo_id=test1" \
+  -F "session_id=test-session" \
+  -F "file=@test.jpg"
 
-# Интеграционные тесты
-pytest tests/integration/
-
-# Ручные тесты
-python tests/manual/test_db_connection.py
+# Search
+curl -X POST "http://localhost:8000/api/v1/search" \
+  -F "session_id=test-session" \
+  -F "file=@selfie.jpg"
 ```
 
-## Основные команды
+## 📖 API Documentation
 
-### Просмотр логов
+Интерактивная документация доступна по адресу:
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
-```bash
-# Все сервисы
-docker-compose logs -f
+## 🔧 Development
 
-# Конкретный сервис
-docker-compose logs -f app
-docker-compose logs -f worker
-```
-
-### Остановка сервисов
+### Local Development
 
 ```bash
-# Остановить без удаления контейнеров
-docker-compose stop
-
-# Остановить и удалить контейнеры
-docker-compose down
-
-# Остановить и удалить контейнеры + volumes (УДАЛИТ ДАННЫЕ!)
-docker-compose down -v
-```
-
-### Перезапуск сервисов
-
-```bash
-# Перезапустить все
-docker-compose restart
-
-# Перезапустить конкретный сервис
-docker-compose restart app
-```
-
-### Масштабирование workers
-
-```bash
-docker-compose up -d --scale worker=3
-```
-
-### Выполнение команд внутри контейнера
-
-```bash
-# Запустить bash в контейнере app
-docker-compose exec app bash
-
-# Выполнить Python скрипт
-docker-compose exec app python scripts/init_db.py
-
-# Запустить тесты
-docker-compose exec app pytest
-```
-
-### Пересборка образов
-
-```bash
-# Пересобрать все образы
-docker-compose build
-
-# Пересобрать конкретный сервис
-docker-compose build app
-
-# Пересобрать и запустить
-docker-compose up -d --build
-```
-
-## Разработка
-
-### Локальная разработка без Docker
-
-1. Создайте виртуальное окружение:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# или
-venv\Scripts\activate  # Windows
-```
-
-2. Установите зависимости:
-
-```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Run locally
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-3. Запустите PostgreSQL и Redis локально или через Docker:
+### Environment Variables
+
+См. `.env.example` для полного списка переменных окружения.
+
+## 📦 Deployment
+
+### Production Checklist
+
+- [ ] Настроить production `.env`
+- [ ] Сгенерировать secure API keys
+- [ ] Настроить CORS origins
+- [ ] Выполнить database migration
+- [ ] Настроить backup strategy
+- [ ] Настроить monitoring (Prometheus + Grafana)
+- [ ] Настроить log aggregation
+- [ ] Провести load testing
+- [ ] Настроить SSL/TLS
+- [ ] Настроить firewall rules
+
+### Docker Compose Production
 
 ```bash
-docker-compose up -d db_main db_vector redis
+docker-compose -f docker-compose.yml up -d
 ```
 
-4. Запустите приложение:
+## 🤝 Integration Example
 
-```bash
-uvicorn app.main:app --reload
+### Python Client
+
+```python
+import requests
+
+API_URL = "http://localhost:8000/api/v1"
+API_KEY = "your-api-key"
+
+# Index photos
+def index_photos(session_id, photos):
+    response = requests.post(
+        f"{API_URL}/index/batch",
+        headers={"X-API-Key": API_KEY},
+        json={
+            "session_id": session_id,
+            "photos": [
+                {"photo_id": p["id"], "s3_key": p["s3_key"]}
+                for p in photos
+            ]
+        }
+    )
+    return response.json()
+
+# Search faces
+def search_faces(session_id, selfie_path):
+    with open(selfie_path, "rb") as f:
+        response = requests.post(
+            f"{API_URL}/search",
+            files={"file": f},
+            data={"session_id": session_id, "threshold": 0.7}
+        )
+    return response.json()
 ```
 
-5. Запустите Celery worker:
+## 📝 License
 
-```bash
-celery -A workers.celery_app worker --loglevel=info
-```
+[Your License]
 
-### Запуск тестов
+## 👥 Authors
 
-```bash
-# Все тесты
-pytest
+[Your Team]
 
-# Unit тесты
-pytest tests/unit/
+## 📞 Support
 
-# Property тесты
-pytest tests/property/
+For issues and questions, please open an issue on GitHub.
 
-# С покрытием кода
-pytest --cov=. --cov-report=html
-```
+---
 
-## API Endpoints
-
-### Health Check
-
-```bash
-GET /api/v1/health
-```
-
-Проверяет подключение к базам данных и Redis.
-
-### Face Recognition (в разработке)
-
-```bash
-# Загрузка лица
-POST /api/v1/faces/upload
-
-# Поиск похожих лиц
-POST /api/v1/faces/search
-```
-
-## Конфигурация
-
-Все настройки управляются через переменные окружения в `.env` файле:
-
-### База данных
-
-- `POSTGRES_USER` - пользователь PostgreSQL
-- `POSTGRES_PASSWORD` - пароль PostgreSQL
-- `POSTGRES_DB` - имя основной БД
-- `VECTOR_POSTGRES_DB` - имя векторной БД
-
-### S3 Storage (Beget)
-
-- `S3_ENDPOINT` - endpoint Beget S3
-- `S3_ACCESS_KEY` - access key
-- `S3_SECRET_KEY` - secret key
-- `S3_BUCKET` - имя bucket
-
-### Redis & Celery
-
-- `REDIS_HOST` - хост Redis
-- `REDIS_PORT` - порт Redis
-- `CELERY_BROKER_URL` - URL брокера (опционально)
-
-### Face Recognition
-
-- `FACE_DETECTION_THRESHOLD` - порог детекции лица (0.0-1.0)
-- `FACE_SIMILARITY_THRESHOLD` - порог схожести (0.0-1.0)
-- `EMBEDDING_DIMENSION` - размерность векторов (512)
-
-## Troubleshooting
-
-### Контейнеры не запускаются
-
-Проверьте логи:
-```bash
-docker-compose logs
-```
-
-### Ошибки подключения к БД
-
-Убедитесь, что health checks проходят:
-```bash
-docker-compose ps
-```
-
-Все сервисы должны быть в статусе "healthy".
-
-### Ошибки при инициализации БД
-
-Проверьте, что переменные окружения заданы правильно:
-```bash
-docker-compose exec app env | grep POSTGRES
-```
-
-### Celery worker не обрабатывает задачи
-
-Проверьте логи worker:
-```bash
-docker-compose logs -f worker
-```
-
-Убедитесь, что Redis доступен:
-```bash
-docker-compose exec worker redis-cli -h redis ping
-```
-
-## Production Deployment
-
-Для production окружения рекомендуется:
-
-1. **Использовать secrets management** вместо .env файлов
-2. **Настроить SSL/TLS** для всех соединений
-3. **Использовать managed PostgreSQL** вместо контейнеров
-4. **Настроить мониторинг** (Prometheus + Grafana)
-5. **Настроить централизованное логирование** (ELK stack)
-6. **Использовать reverse proxy** (Nginx/Traefik) перед app
-7. **Настроить автоматические бэкапы** баз данных
-8. **Сканировать образы** на уязвимости
-
-## Лицензия
-
-[Укажите лицензию проекта]
-
-## Контакты
-
-[Укажите контактную информацию]
+**Version**: 2.0.0  
+**Status**: Production Ready  
+**Last Updated**: 2024-02-26
