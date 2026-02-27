@@ -308,7 +308,7 @@ async def get_session_status(
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def search_faces(
     request: Request,
-    session_id: str = Form(..., description="Photo session UUID to search within"),
+    session_id: str = Form(..., alias="sessionId", description="Photo session UUID to search within"),
     file: UploadFile = File(..., description="Selfie photo to search for"),
     threshold: Optional[float] = Form(None, description="Similarity threshold (0.0-1.0)"),
     limit: int = Form(1000, description="Maximum number of results"),
@@ -355,6 +355,9 @@ async def search_faces(
     # Validate inputs
     validate_session_id(session_id)
     validate_limit(limit)
+    
+    # Log for PM2 monitoring
+    print(f'Searching for session: {session_id}')
     
     start_time = time.time()
     settings = get_settings()
