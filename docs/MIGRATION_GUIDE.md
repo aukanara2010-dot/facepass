@@ -21,16 +21,16 @@ FacePass v2.0 - это полностью изолированный микро�
 ### 2. Изменения в API
 
 #### Удаленные endpoints:
-- `POST /api/v1/faces/search-session` (с auto-indexing)
-- `GET /api/v1/remote-services/{session_id}` (CORS proxy)
+- `POST /api/v2/faces/search-session` (с auto-indexing)
+- `GET /api/v2/remote-services/{session_id}` (CORS proxy)
 - Все event-based endpoints
 
 #### Новые endpoints:
-- `POST /api/v1/index` - индексация одного фото
-- `POST /api/v1/index/batch` - batch индексация
-- `DELETE /api/v1/index/{session_id}` - удаление сессии
-- `POST /api/v1/search` - поиск (без auto-indexing)
-- `GET /api/v1/search/status/{session_id}` - статус индексации
+- `POST /api/v2/index` - индексация одного фото
+- `POST /api/v2/index/batch` - batch индексация
+- `DELETE /api/v2/index/{session_id}` - удаление сессии
+- `POST /api/v2/search` - поиск (без auto-indexing)
+- `GET /api/v2/search/status/{session_id}` - статус индексации
 
 ### 3. Authentication
 
@@ -548,7 +548,7 @@ docker-compose exec db_vector psql -U user -d db -f /code/scripts/rollback_v2.sq
 
 ### Q: Что делать с сессиями, которые были частично проиндексированы?
 
-**A:** Используйте `GET /api/v1/search/status/{session_id}` для проверки статуса и переиндексируйте при необходимости.
+**A:** Используйте `GET /api/v2/search/status/{session_id}` для проверки статуса и переиндексируйте при необходимости.
 
 ### Q: Как обрабатывать rate limiting?
 
@@ -572,14 +572,14 @@ def call_with_retry(func, max_retries=3):
 
 ### Q: Можно ли использовать старый endpoint для поиска?
 
-**A:** Да, legacy endpoint `/api/v1/faces/search-session` сохранен для обратной совместимости, но без auto-indexing. Рекомендуется мигрировать на новый API.
+**A:** Да, legacy endpoint `/api/v2/faces/search-session` сохранен для обратной совместимости, но без auto-indexing. Рекомендуется мигрировать на новый API.
 
 ## Support
 
 При возникновении вопросов:
 1. Проверьте логи FacePass: `docker-compose logs -f app`
-2. Проверьте health: `curl http://facepass:8000/api/v1/health`
-3. Проверьте metrics: `curl http://facepass:8000/api/v1/metrics`
+2. Проверьте health: `curl http://facepass:8000/api/v2/health`
+3. Проверьте metrics: `curl http://facepass:8000/api/v2/metrics`
 
 ---
 

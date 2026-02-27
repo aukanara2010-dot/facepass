@@ -170,7 +170,7 @@ docker-compose build
 docker-compose up -d
 
 # 5. Check health
-curl http://staging.facepass.com/api/v1/health
+curl http://staging.facepass.com/api/v2/health
 ```
 
 - [ ] Staging environment настроен
@@ -182,22 +182,22 @@ curl http://staging.facepass.com/api/v1/health
 #### Smoke Tests на Staging
 ```bash
 # 1. Health check
-curl http://staging:8000/api/v1/health
+curl http://staging:8000/api/v2/health
 
 # 2. Index test photo
-curl -X POST "http://staging:8000/api/v1/index" \
+curl -X POST "http://staging:8000/api/v2/index" \
   -H "X-API-Key: test-key" \
   -F "photo_id=test1" \
   -F "session_id=test-session" \
   -F "file=@test.jpg"
 
 # 3. Search test
-curl -X POST "http://staging:8000/api/v1/search" \
+curl -X POST "http://staging:8000/api/v2/search" \
   -F "session_id=test-session" \
   -F "file=@selfie.jpg"
 
 # 4. Check metrics
-curl http://staging:8000/api/v1/metrics
+curl http://staging:8000/api/v2/metrics
 ```
 
 - [ ] Health check возвращает 200 OK
@@ -242,7 +242,7 @@ docker-compose down
 docker-compose up -d
 
 # 9. Check health
-curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v2/health
 
 # 10. Check logs
 docker-compose logs -f app
@@ -257,20 +257,20 @@ docker-compose logs -f app
 #### Post-Deployment Verification
 ```bash
 # 1. Health check
-curl https://facepass.yourdomain.com/api/v1/health
+curl https://facepass.yourdomain.com/api/v2/health
 
 # 2. Metrics check
-curl https://facepass.yourdomain.com/api/v1/metrics
+curl https://facepass.yourdomain.com/api/v2/metrics
 
 # 3. Test indexing (с production API key)
-curl -X POST "https://facepass.yourdomain.com/api/v1/index" \
+curl -X POST "https://facepass.yourdomain.com/api/v2/index" \
   -H "X-API-Key: $PROD_API_KEY" \
   -F "photo_id=prod-test-1" \
   -F "session_id=prod-test-session" \
   -F "file=@test.jpg"
 
 # 4. Test search
-curl -X POST "https://facepass.yourdomain.com/api/v1/search" \
+curl -X POST "https://facepass.yourdomain.com/api/v2/search" \
   -F "session_id=prod-test-session" \
   -F "file=@selfie.jpg"
 ```
@@ -334,7 +334,7 @@ apt-get install apache2-utils
 
 # Test search endpoint
 ab -n 1000 -c 10 -p selfie.jpg -T 'multipart/form-data' \
-  http://facepass.yourdomain.com/api/v1/search
+  http://facepass.yourdomain.com/api/v2/search
 ```
 
 - [ ] Load test executed
@@ -384,7 +384,7 @@ docker-compose exec db_vector psql -U user -d db < backup.sql
 docker-compose up -d
 
 # 4. Verify
-curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v2/health
 ```
 
 - [ ] Recovery procedure documented
@@ -539,7 +539,7 @@ free -h
 top
 
 # Test API endpoint
-curl -v http://localhost:8000/api/v1/health
+curl -v http://localhost:8000/api/v2/health
 ```
 
 ### B. Troubleshooting

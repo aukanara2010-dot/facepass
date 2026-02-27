@@ -173,35 +173,5 @@ async def request_logging_middleware(request, call_next):
         raise
 # Note: Static files removed in v2.0 (API-only microservice)
 
-# Include API router
-app.include_router(api_router, prefix="/api/v1")
-
-
-@app.get("/")
-async def root():
-    """
-    API root endpoint.
-    
-    Returns basic information about the FacePass API.
-    """
-    return {
-        "service": "FacePass v2.0",
-        "description": "Isolated face recognition microservice",
-        "version": "2.0.0",
-        "docs": "/docs",
-        "health": "/api/v1/health",
-        "metrics": "/api/v1/metrics"
-    }
-
-
-@app.get("/api")
-async def api_info():
-    """API information endpoint"""
-    return {
-        "message": "FacePass API v2.0", 
-        "version": "2.0.0",
-        "docs": "/docs",
-        "redoc": "/redoc",
-        "health": "/api/v1/health",
-        "metrics": "/api/v1/metrics"
-    }
+# Include API router with v2 prefix
+app.include_router(api_router, prefix="/api/v2")

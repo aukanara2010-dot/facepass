@@ -102,18 +102,18 @@ docker-compose up -d
 
 5. Проверьте health:
 ```bash
-curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v2/health
 ```
 
 ## 📋 API Endpoints
 
 ### Protected Endpoints (требуют X-API-Key)
 
-#### POST /api/v1/index
+#### POST /api/v2/index
 Индексация одного фото.
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/index" \
+curl -X POST "http://localhost:8000/api/v2/index" \
   -H "X-API-Key: your-api-key" \
   -F "photo_id=photo123" \
   -F "session_id=session-uuid" \
@@ -130,11 +130,11 @@ curl -X POST "http://localhost:8000/api/v1/index" \
 }
 ```
 
-#### POST /api/v1/index/batch
+#### POST /api/v2/index/batch
 Batch индексация нескольких фото.
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/index/batch" \
+curl -X POST "http://localhost:8000/api/v2/index/batch" \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -156,21 +156,21 @@ curl -X POST "http://localhost:8000/api/v1/index/batch" \
 }
 ```
 
-#### DELETE /api/v1/index/{session_id}
+#### DELETE /api/v2/index/{session_id}
 Удаление всех embeddings для сессии.
 
 ```bash
-curl -X DELETE "http://localhost:8000/api/v1/index/session-uuid" \
+curl -X DELETE "http://localhost:8000/api/v2/index/session-uuid" \
   -H "X-API-Key: your-api-key"
 ```
 
 ### Public Endpoints
 
-#### POST /api/v1/search
+#### POST /api/v2/search
 Поиск похожих лиц.
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/search" \
+curl -X POST "http://localhost:8000/api/v2/search" \
   -F "session_id=session-uuid" \
   -F "file=@selfie.jpg" \
   -F "threshold=0.7" \
@@ -190,11 +190,11 @@ curl -X POST "http://localhost:8000/api/v1/search" \
 }
 ```
 
-#### GET /api/v1/search/status/{session_id}
+#### GET /api/v2/search/status/{session_id}
 Проверка статуса индексации.
 
 ```bash
-curl "http://localhost:8000/api/v1/search/status/session-uuid"
+curl "http://localhost:8000/api/v2/search/status/session-uuid"
 ```
 
 **Response:**
@@ -207,18 +207,18 @@ curl "http://localhost:8000/api/v1/search/status/session-uuid"
 }
 ```
 
-#### GET /api/v1/health
+#### GET /api/v2/health
 Health check endpoint.
 
 ```bash
-curl "http://localhost:8000/api/v1/health"
+curl "http://localhost:8000/api/v2/health"
 ```
 
-#### GET /api/v1/metrics
+#### GET /api/v2/metrics
 Prometheus metrics.
 
 ```bash
-curl "http://localhost:8000/api/v1/metrics"
+curl "http://localhost:8000/api/v2/metrics"
 ```
 
 ## 📊 Monitoring
@@ -303,17 +303,17 @@ docker-compose exec db_vector psql -U facepass_user -d facepass_vector -f /code/
 
 ```bash
 # Health check
-curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v2/health
 
 # Index test photo
-curl -X POST "http://localhost:8000/api/v1/index" \
+curl -X POST "http://localhost:8000/api/v2/index" \
   -H "X-API-Key: test-key" \
   -F "photo_id=test1" \
   -F "session_id=test-session" \
   -F "file=@test.jpg"
 
 # Search
-curl -X POST "http://localhost:8000/api/v1/search" \
+curl -X POST "http://localhost:8000/api/v2/search" \
   -F "session_id=test-session" \
   -F "file=@selfie.jpg"
 ```
