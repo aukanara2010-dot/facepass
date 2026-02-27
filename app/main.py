@@ -171,133 +171,37 @@ async def request_logging_middleware(request, call_next):
             exc_info=True
         )
         raise
-@app.middleware("http")
-async def timeout_middleware(request, call_next):
-    """
-    Custom middleware to handle timeouts for long-running operations.
-    
-    Increases timeout for photo indexing endpoints that may take several minutes
-    to process large photo sessions.
-    """
-    import asyncio
-    from fastapi import HTTPException
-    
-    # Define endpoints that need extended timeouts (in seconds)
-    extended_timeout_endpoints = {
-        "/api/v1/faces/search-session": 600,  # 10 minutes for search with auto-indexing
-        "/api/v1/faces/index-session": 900,   # 15 minutes for manual indexing
-    }
-    
-    # Get timeout for this endpoint
-    timeout = extended_timeout_endpoints.get(request.url.path, 30)  # Default 30 seconds
-    
-    try:
-        # Execute the request with timeout
-        response = await asyncio.wait_for(call_next(request), timeout=timeout)
-        return response
-    except asyncio.TimeoutError:
-        # Return timeout error with helpful message
-        if request.url.path in extended_timeout_endpoints:
-            raise HTTPException(
-                status_code=408,
-                detail={
-                    "error": "Request timeout",
-                    "message": f"Operation took longer than {timeout} seconds. This may happen with large photo sessions.",
-                    "suggestion": "Try again or contact support if the issue persists.",
-                    "timeout_seconds": timeout
-                }
-            )
-        else:
-            raise HTTPException(status_code=408, detail="Request timeout")
-    except Exception as e:
-        # Re-raise other exceptions
-        raise e
-
-# Mount static files for gallery and session interface
-app.mount("/gallery", StaticFiles(directory="app/static/gallery", html=True), name="gallery")
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
-# Add robots.txt endpoint for SEO and security
-@app.get("/robots.txt", response_class=PlainTextResponse)
-async def robots_txt():
-    """Serve robots.txt for search engine crawlers and security"""
-    try:
-        with open("app/static/robots.txt", "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        return """User-agent: *
-Allow: /
-Allow: /static/
-Allow: /session/
-Disallow: /api/
-Disallow: /docs
-Disallow: /redoc
-Crawl-delay: 1"""
-
-# Add security.txt endpoint for responsible disclosure
-@app.get("/.well-known/security.txt", response_class=PlainTextResponse)
-async def security_txt():
-    """Serve security.txt for responsible vulnerability disclosure"""
-    try:
-        with open("app/static/.well-known/security.txt", "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        return """Contact: security@pixorasoft.ru
-Expires: 2025-12-31T23:59:59.000Z
-Canonical: https://facepass.pixorasoft.ru/.well-known/security.txt"""
-
-# Add sitemap.xml endpoint for SEO
-@app.get("/sitemap.xml", response_class=PlainTextResponse)
-async def sitemap_xml():
-    """Serve sitemap.xml for search engines"""
-    try:
-        with open("app/static/sitemap.xml", "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        return """<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-    <url>
-        <loc>https://facepass.pixorasoft.ru/</loc>
-        <changefreq>weekly</changefreq>
-        <priority>1.0</priority>
-    </url>
-</urlset>"""
+# Note: Static files removed in v2.0 (API-only microservice)
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/")
-async def landing_page():
+async def root():
     """
-    Serve the main landing page.
+    API root endpoint.
     
-    This is the entry point for users who want to search for their photos.
+    Returns basic information about the FacePass API.
     """
-    from fastapi.responses import HTMLResponse
-    import os
-    
-    # Read and serve the landing page HTML
-    html_path = os.path.join("app", "static", "index.html")
-    
-    if not os.path.exists(html_path):
-        return HTMLResponse(
-            content="<h1>Landing page not found</h1>",
-            status_code=500
-        )
-    
-    with open(html_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
-    
-    return HTMLResponse(content=html_content)
+    return {
+        "service": "FacePass v2.0",
+        "description": "Isolated face recognition microservice",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "health": "/api/v1/health",
+        "metrics": "/api/v1/metrics"
+    }
 
 
 @app.get("/api")
-async def api_root():
+async def api_info():
+    """API information endpoint"""
     return {
-        "message": "FacePass API", 
-        "version": "1.0.0",
+        "message": "FacePass API v2.0", 
+        "version": "2.0.0",
         "docs": "/docs",
-        "public_interface": "/session/{session_id}",
-        "landing_page": "/"
+        "redoc": "/redoc",
+        "health": "/api/v1/health",
+        "metrics": "/api/v1/metrics"
     }
