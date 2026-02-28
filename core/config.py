@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str
     S3_BUCKET: str
     S3_REGION: str = "ru-1"
+    S3_ENV_PREFIX: str = Field(
+        default="staging",
+        description="S3 environment prefix (staging/production)"
+    )
     
     # API Authentication
     API_KEYS: str = Field(

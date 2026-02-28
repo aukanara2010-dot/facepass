@@ -247,10 +247,13 @@ class IndexingService:
         """
         try:
             from core.s3 import list_s3_objects, download_image
+            from core.config import get_settings
             import os
             
-            # List all objects in S3 originals folder for this session
-            prefix = f"staging/photos/{session_id}/originals/"
+            settings = get_settings()
+            
+            # Construct S3 path dynamically using environment prefix
+            prefix = f"{settings.S3_ENV_PREFIX}/photos/{session_id}/originals/"
             logger.info(f"Searching S3 for photos with prefix: {prefix}")
             print(f'Scanning S3 path: {prefix}')
             
@@ -258,8 +261,8 @@ class IndexingService:
             
             if not s3_keys:
                 logger.warning(f"No photos found in S3 for session {session_id}")
-                print(f'No photos found in S3 originals folder for session {session_id}')
-                return False, 0, "No photos found in S3 originals folder"
+                print(f'No photos found in S3 for path: {prefix}')
+                return False, 0, f"No photos found in S3 for path: {prefix}"
             
             logger.info(f"Found {len(s3_keys)} photos in S3 for session {session_id}")
             print(f'Found {len(s3_keys)} photos in S3 for session {session_id}')
@@ -270,8 +273,8 @@ class IndexingService:
             
             if not image_keys:
                 logger.warning(f"No image files found in S3 for session {session_id}")
-                print(f'No image files (jpg/png) found in S3 for session {session_id}')
-                return False, 0, "No image files found in S3"
+                print(f'No image files (jpg/png) found in S3 for path: {prefix}')
+                return False, 0, f"No image files found in S3 for path: {prefix}"
             
             logger.info(f"Processing {len(image_keys)} image files")
             print(f'Processing {len(image_keys)} image files from S3...')
