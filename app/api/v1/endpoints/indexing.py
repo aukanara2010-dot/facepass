@@ -352,12 +352,17 @@ async def search_faces(
     from core.config import get_settings
     from models.face import FaceEmbedding
     
+    # Log for PM2 monitoring
+    print(f'=== SEARCH REQUEST START ===')
+    print(f'Session ID: {session_id}')
+    print(f'File: {file.filename if file else "None"}')
+    print(f'Threshold: {threshold}')
+    print(f'Limit: {limit}')
+    print(f'===========================')
+    
     # Validate inputs
     validate_session_id(session_id)
     validate_limit(limit)
-    
-    # Log for PM2 monitoring
-    print(f'Searching for session: {session_id}')
     
     start_time = time.time()
     settings = get_settings()
