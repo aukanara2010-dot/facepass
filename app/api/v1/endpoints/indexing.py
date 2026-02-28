@@ -429,12 +429,28 @@ async def search_faces(
             FaceEmbedding.session_id == sessionId
         ).count()
         
+        # If no embeddings found locally, try to load from S3
         if embedding_count == 0:
-            logger.info(f"No indexed photos found for session {sessionId}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No indexed photos found for this session. Please index photos first."
-            )
+            print(f'Session {sessionId} not found locally. Starting download from S3...')
+            logger.info(f"No indexed photos found locally for session {sessionId}. Attempting S3 sync...")
+            
+            # Try to load embeddings from S3
+            indexing_service = get_indexing_service()
+            success, indexed_count, error = indexing_service.load_embeddings_from_s3(sessionId, db)
+            
+            if not success:
+                logger.warning(f"Failed to load embeddings from S3 for session {sessionId}: {error}")
+                print(f'Session {sessionId} not found in S3 storage.')
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Session not found in S3 storage. Please index photos first."
+                )
+            
+            print(f'Successfully loaded {indexed_count} embeddings from S3 for session {sessionId}')
+            logger.info(f"Successfully loaded {indexed_count} embeddings from S3 for session {sessionId}")
+            
+            # Update embedding count after S3 sync
+            embedding_count = indexed_count
         
         logger.info(f"Session {sessionId} has {embedding_count} indexed photos")
         

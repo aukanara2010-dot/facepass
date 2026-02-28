@@ -226,6 +226,68 @@ class IndexingService:
         except Exception as e:
             logger.error(f"Error getting session status {session_id}: {str(e)}")
             raise
+    
+    def load_embeddings_from_s3(
+        self,
+        session_id: str,
+        db: Session
+    ) -> Tuple[bool, int, Optional[str]]:
+        """
+        Load embeddings from S3 for a session.
+        
+        This function downloads all photos from S3 for a given session
+        and indexes them in the local vector database.
+        
+        Args:
+            session_id: Photo session UUID
+            db: Database session
+            
+        Returns:
+            Tuple of (success, indexed_count, error_message)
+        """
+        try:
+            from core.s3 import list_s3_objects
+            
+            # List all objects in S3 for this session
+            prefix = f"embeddings/{session_id}/"
+            logger.info(f"Searching S3 for embeddings with prefix: {prefix}")
+            
+            s3_keys = list_s3_objects(prefix)
+            
+            if not s3_keys:
+                logger.warning(f"No embeddings found in S3 for session {session_id}")
+                return False, 0, "No embeddings found in S3"
+            
+            logger.info(f"Found {len(s3_keys)} objects in S3 for session {session_id}")
+            
+            # Index each photo from S3
+            indexed = 0
+            failed = 0
+            
+            for s3_key in s3_keys:
+                # Extract photo_id from s3_key (e.g., "embeddings/session-id/photo123.jpg" -> "photo123")
+                photo_id = s3_key.split('/')[-1].split('.')[0]
+                
+                success, confidence, faces, error = self.index_photo_from_s3(
+                    photo_id, session_id, s3_key, db
+                )
+                
+                if success:
+                    indexed += 1
+                else:
+                    failed += 1
+                    logger.warning(f"Failed to index {photo_id} from S3: {error}")
+            
+            logger.info(f"S3 sync completed: {indexed} indexed, {failed} failed")
+            
+            if indexed == 0:
+                return False, 0, f"Failed to index any photos from S3 ({failed} failed)"
+            
+            return True, indexed, None
+            
+        except Exception as e:
+            logger.error(f"Error loading embeddings from S3 for session {session_id}: {str(e)}")
+            return False, 0, str(e)
 
 
 # Singleton instance
