@@ -308,10 +308,10 @@ async def get_session_status(
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def search_faces(
     request: Request,
-    session_id: str = Form(..., alias="sessionId", description="Photo session UUID to search within"),
     file: UploadFile = File(..., description="Selfie photo to search for"),
-    threshold: Optional[float] = Form(None, description="Similarity threshold (0.0-1.0)"),
-    limit: int = Form(1000, description="Maximum number of results"),
+    session_id: str = Form(..., alias="sessionId", description="Photo session UUID to search within"),
+    threshold: float = Form(0.6, description="Similarity threshold (0.0-1.0)"),
+    limit: int = Form(100, description="Maximum number of results"),
     db: Session = Depends(get_db)
 ) -> dict:
     """
@@ -332,10 +332,10 @@ async def search_faces(
     4. Return matches with similarity scores
     
     Args:
-        session_id: Session UUID to search within
         file: Selfie image file
-        threshold: Minimum similarity score (uses config default if not provided)
-        limit: Maximum number of results to return
+        session_id: Session UUID to search within (sent as "sessionId" in form)
+        threshold: Minimum similarity score (default: 0.6)
+        limit: Maximum number of results to return (default: 100)
         db: Database session
         
     Returns:
@@ -352,26 +352,16 @@ async def search_faces(
     from core.config import get_settings
     from models.face import FaceEmbedding
     
-    # Log for PM2 monitoring
-    print(f'=== SEARCH REQUEST START ===')
-    print(f'Session ID: {session_id}')
-    print(f'File: {file.filename if file else "None"}')
-    print(f'Threshold: {threshold}')
-    print(f'Limit: {limit}')
-    print(f'===========================')
+    # Log for PM2 monitoring - SUCCESS VALIDATION
+    print(f'>>> SUCCESS VALIDATION: session={session_id}, file={file.filename}')
     
     # Validate inputs
     validate_session_id(session_id)
     validate_limit(limit)
+    validate_threshold(threshold)
     
     start_time = time.time()
     settings = get_settings()
-    
-    # Use config default if threshold not provided
-    if threshold is None:
-        threshold = settings.FACE_SIMILARITY_THRESHOLD
-    else:
-        validate_threshold(threshold)
     
     logger.info(f"Starting face search for session {session_id} with threshold {threshold}")
     
