@@ -309,7 +309,7 @@ async def get_session_status(
 async def search_faces(
     request: Request,
     file: UploadFile = File(..., description="Selfie photo to search for"),
-    session_id: str = Form(..., alias="sessionId", description="Photo session UUID to search within"),
+    sessionId: str = Form(..., description="Photo session UUID to search within"),
     threshold: float = Form(0.6, description="Similarity threshold (0.0-1.0)"),
     limit: int = Form(100, description="Maximum number of results"),
     db: Session = Depends(get_db)
@@ -333,7 +333,7 @@ async def search_faces(
     
     Args:
         file: Selfie image file
-        session_id: Session UUID to search within (sent as "sessionId" in form)
+        sessionId: Session UUID to search within
         threshold: Minimum similarity score (default: 0.6)
         limit: Maximum number of results to return (default: 100)
         db: Database session
@@ -352,18 +352,18 @@ async def search_faces(
     from core.config import get_settings
     from models.face import FaceEmbedding
     
-    # Log for PM2 monitoring - SUCCESS VALIDATION
-    print(f'>>> SUCCESS VALIDATION: session={session_id}, file={file.filename}')
+    # Log for PM2 monitoring
+    print(f'>>> ЗАПРОС ПРИНЯТ: sessionId={sessionId}, file={file.filename}')
     
     # Validate inputs
-    validate_session_id(session_id)
+    validate_session_id(sessionId)
     validate_limit(limit)
     validate_threshold(threshold)
     
     start_time = time.time()
     settings = get_settings()
     
-    logger.info(f"Starting face search for session {session_id} with threshold {threshold}")
+    logger.info(f"Starting face search for session {sessionId} with threshold {threshold}")
     
     # Validate and read file
     file_data = await validate_image_upload(file)
@@ -426,17 +426,17 @@ async def search_faces(
     # Check if session has any indexed photos
     try:
         embedding_count = db.query(FaceEmbedding).filter(
-            FaceEmbedding.session_id == session_id
+            FaceEmbedding.session_id == sessionId
         ).count()
         
         if embedding_count == 0:
-            logger.info(f"No indexed photos found for session {session_id}")
+            logger.info(f"No indexed photos found for session {sessionId}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No indexed photos found for this session. Please index photos first."
             )
         
-        logger.info(f"Session {session_id} has {embedding_count} indexed photos")
+        logger.info(f"Session {sessionId} has {embedding_count} indexed photos")
         
     except HTTPException:
         raise
@@ -449,7 +449,7 @@ async def search_faces(
     
     # Perform vector similarity search
     try:
-        logger.info(f"Searching for similar faces in session {session_id} with threshold {threshold}")
+        logger.info(f"Searching for similar faces in session {sessionId} with threshold {threshold}")
         
         # Get matches above threshold using cosine similarity
         query = text("""
@@ -468,7 +468,7 @@ async def search_faces(
             query,
             {
                 "query_embedding": query_embedding_str,
-                "session_id": session_id,
+                "session_id": sessionId,
                 "threshold": threshold,
                 "limit": limit
             }
@@ -497,7 +497,7 @@ async def search_faces(
         return {
             "matches": matches,
             "query_time_ms": query_time_ms,
-            "session_id": session_id,
+            "session_id": sessionId,
             "total_matches": len(matches),
             "indexed_photos": embedding_count,
             "search_threshold": threshold
@@ -505,7 +505,7 @@ async def search_faces(
         
     except Exception as e:
         import traceback
-        logger.error(f"Search failed for session {session_id}: {str(e)}")
+        logger.error(f"Search failed for session {sessionId}: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
