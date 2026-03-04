@@ -125,7 +125,8 @@ class IndexingService:
         self,
         session_id: str,
         photos: List[Tuple[str, str]],
-        db: Session
+        db: Session,
+        s3_prefix: Optional[str] = None
     ) -> Tuple[int, int, List[str]]:
         """
         Index multiple photos in batch.
@@ -134,17 +135,39 @@ class IndexingService:
             session_id: Photo session UUID
             photos: List of (photo_id, s3_key) tuples
             db: Database session
+            s3_prefix: S3 environment prefix
             
         Returns:
             Tuple of (indexed_count, failed_count, error_messages)
         """
+        from core.config import get_settings
+        settings = get_settings()
+        env_prefix = s3_prefix or settings.S3_ENV_PREFIX
+        
         indexed = 0
         failed = 0
         errors = []
         
         for photo_id, s3_key in photos:
+            # Ensure s3_key starts with the correct prefix
+            if not s3_key.startswith(f"{env_prefix}/"):
+                # If it already has a prefix but it's different, we might need to replace it
+                # or just prepend if it's missing. Pixora usually sends keys like 'sessions/...'
+                # but we want 'staging/sessions/...'
+                if not any(s3_key.startswith(p) for p in ["staging/", "production/"]):
+                    full_s3_key = f"{env_prefix}/{s3_key}"
+                else:
+                    # Replace existing prefix if it doesn't match
+                    parts = s3_key.split('/', 1)
+                    if len(parts) > 1:
+                        full_s3_key = f"{env_prefix}/{parts[1]}"
+                    else:
+                        full_s3_key = f"{env_prefix}/{s3_key}"
+            else:
+                full_s3_key = s3_key
+
             success, confidence, faces, error = self.index_photo_from_s3(
-                photo_id, session_id, s3_key, db
+                photo_id, session_id, full_s3_key, db
             )
             
             if success:
@@ -230,7 +253,8 @@ class IndexingService:
     def load_embeddings_from_s3(
         self,
         session_id: str,
-        db: Session
+        db: Session,
+        s3_prefix: Optional[str] = None
     ) -> Tuple[bool, int, Optional[str]]:
         """
         Load embeddings from S3 for a session.
@@ -241,6 +265,7 @@ class IndexingService:
         Args:
             session_id: Photo session UUID
             db: Database session
+            s3_prefix: S3 environment prefix
             
         Returns:
             Tuple of (success, indexed_count, error_message)
@@ -251,9 +276,10 @@ class IndexingService:
             import os
             
             settings = get_settings()
+            env_prefix = s3_prefix or settings.S3_ENV_PREFIX
             
             # Construct S3 path dynamically using environment prefix
-            prefix = f"{settings.S3_ENV_PREFIX}/photos/{session_id}/originals/"
+            prefix = f"{env_prefix}/photos/{session_id}/originals/"
             logger.info(f"Searching S3 for photos with prefix: {prefix}")
             print(f'Scanning S3 path: {prefix}')
             

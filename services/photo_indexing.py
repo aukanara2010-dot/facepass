@@ -275,11 +275,12 @@ class PhotoIndexingService:
             return False, f"Unexpected error: {str(e)}"
     
     def index_session_photos(
-        self, 
-        session_id: str, 
+        self,
+        session_id: str,
         vector_db: Session,
         max_photos: int = 1000,
-        environment: str = "auto"
+        environment: str = "auto",
+        s3_prefix: Optional[str] = None
     ) -> Tuple[int, int, List[str]]:
         """
         Index all photos in a session by extracting and storing face embeddings.
@@ -304,7 +305,9 @@ class PhotoIndexingService:
             
             # Scan for photos in S3
             try:
-                photo_keys = self.scan_session_photos(session_id, environment)
+                # If s3_prefix is explicitly provided, use it as the environment
+                scan_env = s3_prefix if s3_prefix else environment
+                photo_keys = self.scan_session_photos(session_id, scan_env)
             except S3Error as e:
                 error_msg = f"Failed to scan S3 photos: {str(e)}"
                 logger.error(error_msg)

@@ -48,6 +48,7 @@ async def index_photo(
     photo_id: str = Form(..., description="Unique photo identifier (UUID or filename)"),
     session_id: str = Form(..., description="Photo session UUID"),
     s3_key: Optional[str] = Form(None, description="S3 key for the photo (if already uploaded)"),
+    s3_prefix: Optional[str] = Form(None, description="S3 environment prefix (staging/production)"),
     file: Optional[UploadFile] = File(None, description="Photo file (if not using s3_key)"),
     db: Session = Depends(get_db)
 ) -> IndexPhotoResponse:
@@ -83,7 +84,12 @@ async def index_photo(
     validate_photo_id(photo_id)
     validate_session_id(session_id)
     
+    from core.config import get_settings
+    settings = get_settings()
     indexing_service = get_indexing_service()
+    
+    # Determine S3 prefix
+    env_prefix = s3_prefix or settings.S3_ENV_PREFIX
     
     # Validate input: must provide either file or s3_key
     if not file and not s3_key:
@@ -102,6 +108,18 @@ async def index_photo(
                 photo_id, session_id, image_data, db
             )
         else:
+            # Ensure s3_key has the correct prefix
+            if not s3_key.startswith(f"{env_prefix}/"):
+                if not any(s3_key.startswith(p) for p in ["staging/", "production/"]):
+                    s3_key = f"{env_prefix}/{s3_key}"
+                else:
+                    # Replace existing prefix if it doesn't match
+                    parts = s3_key.split('/', 1)
+                    if len(parts) > 1:
+                        s3_key = f"{env_prefix}/{parts[1]}"
+                    else:
+                        s3_key = f"{env_prefix}/{s3_key}"
+
             # Index from S3
             success, confidence, faces_detected, error = indexing_service.index_photo_from_s3(
                 photo_id, session_id, s3_key, db
@@ -145,7 +163,9 @@ async def index_photo(
 @limiter.limit(INDEXING_RATE_LIMIT)
 async def index_batch(
     request: Request,
-    batch_request: BatchIndexRequest,
+    sessionId: str = Form(..., description="Photo session UUID"),
+    files: list[UploadFile] = File(..., description="List of photo files to index"),
+    s3_prefix: Optional[str] = Form(None, description="S3 environment prefix (staging/production)"),
     db: Session = Depends(get_db)
 ) -> BatchIndexResponse:
     """
@@ -158,7 +178,9 @@ async def index_batch(
     will have their embeddings updated.
     
     Args:
-        request: Batch indexing request with session_id and list of photos
+        request: Request object
+        sessionId: Session UUID this batch belongs to
+        files: List of uploaded photo files
         db: Database session
         
     Returns:
@@ -168,27 +190,51 @@ async def index_batch(
         HTTPException 400: If request is invalid
         HTTPException 500: If batch indexing fails
     """
+    from core.config import get_settings
+    settings = get_settings()
+    
+    # Debug logging as requested
+    print(f'>>> BATCH INDEX ATTEMPT: sessionId={sessionId}, prefix_from_config={settings.S3_ENV_PREFIX}')
+    
     indexing_service = get_indexing_service()
     
-    if not batch_request.photos:
+    if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Photos list cannot be empty"
+            detail="Files list cannot be empty"
         )
     
     try:
-        # Convert to list of tuples
-        photos = [(item.photo_id, item.s3_key) for item in batch_request.photos]
+        indexed = 0
+        failed = 0
+        errors = []
         
-        # Index batch
-        indexed, failed, errors = indexing_service.index_batch(
-            batch_request.session_id, photos, db
-        )
+        for file in files:
+            try:
+                # Use filename as photo_id
+                photo_id = file.filename
+                
+                # Validate and read file
+                image_data = await validate_image_upload(file)
+                
+                # Index from uploaded file
+                success, confidence, faces_detected, error = indexing_service.index_photo(
+                    photo_id, sessionId, image_data, db
+                )
+                
+                if success:
+                    indexed += 1
+                else:
+                    failed += 1
+                    errors.append(f"{photo_id}: {error}")
+            except Exception as e:
+                failed += 1
+                errors.append(f"{file.filename}: {str(e)}")
         
         return BatchIndexResponse(
             indexed=indexed,
             failed=failed,
-            total=len(photos),
+            total=len(files),
             errors=errors[:10]  # Limit to first 10 errors
         )
         
@@ -312,6 +358,7 @@ async def search_faces(
     sessionId: str = Form(..., description="Photo session UUID to search within"),
     threshold: float = Form(0.6, description="Similarity threshold (0.0-1.0)"),
     limit: int = Form(100, description="Maximum number of results"),
+    s3_prefix: Optional[str] = Form(None, description="S3 environment prefix (staging/production)"),
     db: Session = Depends(get_db)
 ) -> dict:
     """
@@ -436,7 +483,7 @@ async def search_faces(
             
             # Try to load embeddings from S3
             indexing_service = get_indexing_service()
-            success, indexed_count, error = indexing_service.load_embeddings_from_s3(sessionId, db)
+            success, indexed_count, error = indexing_service.load_embeddings_from_s3(sessionId, db, s3_prefix=s3_prefix)
             
             if not success:
                 logger.warning(f"Failed to load embeddings from S3 for session {sessionId}: {error}")
@@ -490,6 +537,9 @@ async def search_faces(
             }
         )
         
+        # Determine S3 prefix for URL construction
+        env_prefix = s3_prefix or settings.S3_ENV_PREFIX
+
         # Collect matches
         matches = []
         for row in result:
@@ -497,10 +547,16 @@ async def search_faces(
             similarity = float(row[1])
             face_confidence = float(row[2])
             
+            # Construct S3 URL (assuming standard structure)
+            # Default structure: {env_prefix}/photos/{session_id}/previews/{photo_id}.jpg
+            s3_key = f"{env_prefix}/photos/{sessionId}/previews/{photo_id}.jpg"
+            image_url = f"{settings.S3_ENDPOINT}/{settings.S3_BUCKET}/{s3_key}"
+            
             matches.append({
                 "photo_id": photo_id,
                 "similarity": similarity,
-                "confidence": face_confidence
+                "confidence": face_confidence,
+                "image_url": image_url
             })
         
         logger.info(f"Found {len(matches)} matches above threshold {threshold}")

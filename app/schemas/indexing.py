@@ -14,13 +14,15 @@ class IndexPhotoRequest(BaseModel):
     photo_id: str = Field(..., description="Unique photo identifier (UUID or filename)")
     session_id: str = Field(..., description="Photo session UUID")
     s3_key: Optional[str] = Field(None, description="S3 key for the photo (if already uploaded)")
+    s3_prefix: Optional[str] = Field(None, description="S3 environment prefix (staging/production)")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "photo_id": "550e8400-e29b-41d4-a716-446655440000",
                 "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-                "s3_key": "sessions/7c9e6679-7425-40de-944b-e07fc1f90ae7/photo1.jpg"
+                "s3_key": "sessions/7c9e6679-7425-40de-944b-e07fc1f90ae7/photo1.jpg",
+                "s3_prefix": "staging"
             }
         }
 
@@ -63,6 +65,7 @@ class BatchIndexRequest(BaseModel):
     """Request schema for batch photo indexing."""
     session_id: str = Field(..., description="Photo session UUID")
     photos: List[BatchIndexItem] = Field(..., description="List of photos to index")
+    s3_prefix: Optional[str] = Field(None, description="S3 environment prefix (staging/production)")
     
     class Config:
         json_schema_extra = {
@@ -77,7 +80,8 @@ class BatchIndexRequest(BaseModel):
                         "photo_id": "6fa459ea-ee8a-3ca4-894e-db77e160355e",
                         "s3_key": "sessions/session-uuid/photo2.jpg"
                     }
-                ]
+                ],
+                "s3_prefix": "staging"
             }
         }
 
