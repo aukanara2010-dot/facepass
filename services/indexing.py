@@ -259,8 +259,9 @@ class IndexingService:
         """
         Load embeddings from S3 for a session.
         
-        This function downloads all photos from S3 originals folder for a given session,
-        extracts face embeddings, and indexes them in the local vector database.
+        This function downloads photos from S3 originals folder for a given session,
+        compares them with existing database records, and only indexes files that
+        aren't already in the database.
         
         Args:
             session_id: Photo session UUID
@@ -274,6 +275,8 @@ class IndexingService:
             from core.s3 import list_s3_objects, download_image
             from core.config import get_settings
             import os
+            from models.face import FaceEmbedding
+            from PIL import Image, UnidentifiedImageError
             
             settings = get_settings()
             env_prefix = s3_prefix or settings.S3_ENV_PREFIX
@@ -303,29 +306,74 @@ class IndexingService:
                 print(f'No image files found in S3 for path: {prefix}')
                 return False, 0, f"No image files found in S3 for path: {prefix}"
             
-            logger.info(f"Processing {len(image_keys)} image files")
-            print(f'Processing {len(image_keys)} image files from S3...')
+            # Get existing photo_ids from the database for this session
+            existing_photo_ids = set()
+            existing_records = db.query(FaceEmbedding.photo_id).filter(
+                FaceEmbedding.session_id == session_id
+            ).all()
             
-            # Index each photo from S3
+            for record in existing_records:
+                existing_photo_ids.add(record[0].lower())  # Store lowercase for case-insensitive comparison
+            
+            logger.info(f"Found {len(existing_photo_ids)} existing photo records in database for session {session_id}")
+            print(f'Found {len(existing_photo_ids)} existing photo records in database')
+            
+            # Prepare list of photos to process (only those not in the database)
+            photos_to_process = []
+            for s3_key in image_keys:
+                filename = os.path.basename(s3_key)
+                # Get photo_id without extension and convert to lowercase for case-insensitive comparison
+                photo_id = os.path.splitext(filename)[0].lower()
+                
+                if photo_id not in existing_photo_ids:
+                    # Store original photo_id (not lowercase) for indexing
+                    original_photo_id = os.path.splitext(filename)[0]
+                    photos_to_process.append((s3_key, original_photo_id))
+            
+            logger.info(f"Found {len(photos_to_process)} new photos to process out of {len(image_keys)} total")
+            print(f'Processing {len(photos_to_process)} new photos out of {len(image_keys)} total from S3...')
+            
+            if not photos_to_process:
+                logger.info(f"All photos for session {session_id} are already indexed")
+                print(f'All photos for session {session_id} are already indexed')
+                return True, len(existing_photo_ids), None
+            
+            # Index each new photo from S3
             indexed = 0
             failed = 0
             
-            for s3_key in image_keys:
+            for s3_key, photo_id in photos_to_process:
                 try:
-                    # Extract photo_id from s3_key (filename without extension)
-                    filename = os.path.basename(s3_key)
-                    photo_id = os.path.splitext(filename)[0]
-                    
                     print(f'Processing file from S3: {s3_key}')
-                    logger.info(f"Processing {filename} (photo_id: {photo_id})")
+                    logger.info(f"Processing {os.path.basename(s3_key)} (photo_id: {photo_id})")
                     
                     # Download image from S3
                     image_data = download_image(s3_key)
                     
                     if not image_data:
-                        logger.warning(f"Failed to download {s3_key}")
+                        logger.warning(f"Failed to download {s3_key} - file may be empty (0 bytes)")
                         failed += 1
                         continue
+                    
+                    # Check for zero-byte files or truncated images
+                    try:
+                        if len(image_data) == 0:
+                            logger.warning(f"Zero-byte file detected: {s3_key}")
+                            failed += 1
+                            continue
+                            
+                        # Try to open the image to check if it's valid
+                        import io
+                        Image.open(io.BytesIO(image_data)).verify()
+                    except UnidentifiedImageError:
+                        logger.warning(f"Truncated or corrupt image detected: {s3_key}")
+                        failed += 1
+                        continue
+                    except Exception as img_err:
+                        if "truncated" in str(img_err).lower():
+                            logger.warning(f"Truncated image detected: {s3_key} - {str(img_err)}")
+                            failed += 1
+                            continue
                     
                     # Extract face embedding and index
                     success, confidence, faces, error = self.index_photo(
@@ -334,39 +382,33 @@ class IndexingService:
                     
                     if success:
                         indexed += 1
-                        print(f'✓ Indexed {filename} (confidence: {confidence:.2f})')
-                        logger.info(f"Successfully indexed {filename}")
+                        print(f'✓ Indexed {os.path.basename(s3_key)} (confidence: {confidence:.2f})')
+                        logger.info(f"Successfully indexed {os.path.basename(s3_key)}")
                     else:
                         failed += 1
-                        print(f'✗ Failed to index {filename}: {error}')
-                        logger.warning(f"Failed to index {filename}: {error}")
+                        print(f'✗ Failed to index {os.path.basename(s3_key)}: {error}')
+                        logger.warning(f"Failed to index {os.path.basename(s3_key)}: {error}")
                         
                 except Exception as e:
                     failed += 1
                     logger.error(f"Error processing {s3_key}: {str(e)}")
                     print(f'✗ Error processing {s3_key}: {str(e)}')
             
-            logger.info(f"S3 sync completed: {indexed} indexed, {failed} failed")
-            print(f'S3 sync completed: {indexed} indexed, {failed} failed')
+            # Get total indexed count (including previously indexed)
+            total_indexed = len(existing_photo_ids) + indexed
             
-            if indexed == 0:
+            logger.info(f"S3 sync completed: {indexed} newly indexed, {failed} failed, {total_indexed} total indexed")
+            print(f'S3 sync completed: {indexed} newly indexed, {failed} failed, {total_indexed} total indexed')
+            
+            # Return success even if no new photos were indexed but existing ones were found
+            if indexed == 0 and len(existing_photo_ids) == 0:
                 return False, 0, f"Failed to index any photos from S3 ({failed} failed)"
             
-            return True, indexed, None
+            return True, total_indexed, None
             
         except Exception as e:
             logger.error(f"Error loading embeddings from S3 for session {session_id}: {str(e)}")
             print(f'Error loading from S3: {str(e)}')
-            return False, 0, str(e)
-            logger.info(f"S3 sync completed: {indexed} indexed, {failed} failed")
-            
-            if indexed == 0:
-                return False, 0, f"Failed to index any photos from S3 ({failed} failed)"
-            
-            return True, indexed, None
-            
-        except Exception as e:
-            logger.error(f"Error loading embeddings from S3 for session {session_id}: {str(e)}")
             return False, 0, str(e)
 
 
