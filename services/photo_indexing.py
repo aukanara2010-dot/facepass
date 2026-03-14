@@ -117,15 +117,13 @@ class PhotoIndexingService:
                     except S3Error:
                         continue
             
+            from core.config import SUPPORTED_EXTENSIONS
+            
             # Filter for image files
-            image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'}
             photo_objects = []
             
             for obj_key in all_objects:
-                # Get file extension
-                file_ext = '.' + obj_key.lower().split('.')[-1] if '.' in obj_key else ''
-                
-                if file_ext in image_extensions:
+                if obj_key.lower().endswith(SUPPORTED_EXTENSIONS):
                     photo_objects.append(obj_key)
             
             logger.info(f"Found {len(photo_objects)} photos in session {session_id} (prefix: {found_prefix})")

@@ -81,6 +81,13 @@ async def validate_image_upload(file: UploadFile) -> bytes:
     
     # Validate image format and dimensions
     try:
+        # Try to register HEIF opener if available
+        try:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except ImportError:
+            pass
+
         image = Image.open(io.BytesIO(file_data))
         
         # Verify image (checks for corrupted files)

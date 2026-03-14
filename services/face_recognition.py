@@ -54,20 +54,31 @@ class FaceRecognitionService:
         Returns:
             numpy array in BGR format
         """
-        # Load image with PIL
-        image = Image.open(io.BytesIO(image_data))
-        
-        # Convert to RGB if needed
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # Convert to numpy array
-        img_array = np.array(image)
-        
-        # Convert RGB to BGR (OpenCV/InsightFace format)
-        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-        
-        return img_bgr
+        try:
+            # Try to register HEIF opener if available
+            try:
+                import pillow_heif
+                pillow_heif.register_heif_opener()
+            except ImportError:
+                pass
+
+            # Load image with PIL
+            image = Image.open(io.BytesIO(image_data))
+            
+            # Convert to RGB if needed
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Convert to numpy array
+            img_array = np.array(image)
+            
+            # Convert RGB to BGR (OpenCV/InsightFace format)
+            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+            
+            return img_bgr
+        except Exception as e:
+            logger.error(f"Failed to convert image bytes to array: {e}")
+            raise ValueError(f"Image processing failed: {str(e)}")
     
     def get_embeddings(self, image_data: bytes) -> List[Tuple[np.ndarray, float]]:
         """

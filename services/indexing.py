@@ -293,13 +293,14 @@ class IndexingService:
             logger.info(f"Found {len(s3_keys)} photos in S3 for session {session_id}")
             print(f'Found {len(s3_keys)} photos in S3 for session {session_id}')
             
-            # Filter only image files (jpg, jpeg, png)
-            image_extensions = ('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG')
-            image_keys = [key for key in s3_keys if key.lower().endswith(image_extensions)]
+            from core.config import SUPPORTED_EXTENSIONS
+            
+            # Filter only image files
+            image_keys = [key for key in s3_keys if key.lower().endswith(SUPPORTED_EXTENSIONS)]
             
             if not image_keys:
                 logger.warning(f"No image files found in S3 for session {session_id}")
-                print(f'No image files (jpg/png) found in S3 for path: {prefix}')
+                print(f'No image files found in S3 for path: {prefix}')
                 return False, 0, f"No image files found in S3 for path: {prefix}"
             
             logger.info(f"Processing {len(image_keys)} image files")

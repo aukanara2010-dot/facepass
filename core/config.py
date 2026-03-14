@@ -11,6 +11,8 @@ from typing import Optional, List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+SUPPORTED_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif')
+
 
 class Settings(BaseSettings):
     """

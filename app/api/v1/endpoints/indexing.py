@@ -400,7 +400,8 @@ async def search_faces(
     from models.face import FaceEmbedding
     
     # Log for PM2 monitoring
-    print(f'>>> ЗАПРОС ПРИНЯТ: sessionId={sessionId}, file={file.filename}')
+    print(f'>>> ЗАПРОС ПРИНЯТ: sessionId={sessionId}, file={file.filename}, s3_prefix={s3_prefix}')
+    logger.info(f"Search request received: sessionId={sessionId}, s3_prefix={s3_prefix}")
     
     # Validate inputs
     validate_session_id(sessionId)
@@ -539,6 +540,7 @@ async def search_faces(
         
         # Determine S3 prefix for URL construction
         env_prefix = s3_prefix or settings.S3_ENV_PREFIX
+        print(f'>>> DEBUG: env_prefix for URL construction: {env_prefix}')
 
         # Collect matches
         matches = []
