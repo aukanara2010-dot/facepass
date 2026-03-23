@@ -6,6 +6,7 @@ checking indexing status, health checks, and metrics.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
+from services.tasks import sync_s3_photos_task
 from sqlalchemy.orm import Session
 import logging
 import time
@@ -471,39 +472,31 @@ async def search_faces(
             detail=f"Error processing embedding: {str(e)}"
         )
     
-    # Always check S3 for new photos and index them before search
+    # Check how many photos are already indexed, then kick off a background
+    # S3 sync so new photos are available for the *next* request.
+    # The current request searches against whatever is already in the DB —
+    # this keeps response time at ~200 ms regardless of S3 latency.
     try:
-        # Get current embedding count
-        embedding_count = db.query(FaceEmbedding).filter(
-            FaceEmbedding.session_id == sessionId
+        from models.face import FaceEmbedding as _FE
+        embedding_count = db.query(_FE).filter(
+            _FE.session_id == sessionId
         ).count()
-        
-        # Always try to load embeddings from S3 to check for new photos
-        print(f'Checking S3 for new photos in session {sessionId}...')
-        logger.info(f"Checking S3 for new photos in session {sessionId}")
-        
-        # Try to load embeddings from S3
-        indexing_service = get_indexing_service()
-        success, indexed_count, error = indexing_service.load_embeddings_from_s3(sessionId, db, s3_prefix=s3_prefix)
-        
-        if not success and embedding_count == 0:
-            # Only raise an error if we have no existing embeddings and S3 sync failed
-            logger.warning(f"Failed to load embeddings from S3 for session {sessionId}: {error}")
-            print(f'Session {sessionId} not found in S3 storage.')
+
+        if embedding_count == 0:
+            # No data at all — nothing to search; tell the caller to wait.
+            logger.warning(f"Session {sessionId} has no indexed photos yet")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Session not found in S3 storage. Please index photos first."
             )
-        
-        if success:
-            print(f'Successfully synced with S3: {indexed_count} total embeddings for session {sessionId}')
-            logger.info(f"Successfully synced with S3: {indexed_count} total embeddings for session {sessionId}")
-            
-            # Update embedding count after S3 sync
-            embedding_count = indexed_count
-        
-        logger.info(f"Session {sessionId} has {embedding_count} indexed photos")
-        
+
+        # Fire-and-forget: index any new S3 photos in the background.
+        sync_s3_photos_task.delay(sessionId)
+        logger.info(
+            f"Session {sessionId} has {embedding_count} indexed photos; "
+            "background S3 sync enqueued"
+        )
+
     except HTTPException:
         raise
     except Exception as e:
