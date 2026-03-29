@@ -9,6 +9,10 @@ import multiprocessing
 import os
 
 from celery import Celery
+from dotenv import load_dotenv
+
+# Load .env before reading any environment variables
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Broker / backend — read credentials from environment / .env
