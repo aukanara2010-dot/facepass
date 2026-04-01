@@ -483,8 +483,13 @@ async def search_faces(
         ).count()
 
         if embedding_count == 0:
-            # No data at all — nothing to search; tell the caller to wait.
-            logger.warning(f"Session {sessionId} has no indexed photos yet")
+            # No data at all — nothing to search; trigger S3 sync so the
+            # caller can retry after indexing completes, then return 404.
+            logger.warning(
+                f"Session {sessionId} has no indexed photos yet; "
+                "triggering background S3 sync"
+            )
+            sync_s3_photos_task.delay(sessionId)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Session not found in S3 storage. Please index photos first."
