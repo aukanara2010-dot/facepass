@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
+    REDIS_PASSWORD: Optional[str] = None
     
     # Celery (Optional, will use Redis URL if not provided)
     CELERY_BROKER_URL: Optional[str] = None
@@ -110,10 +111,20 @@ class Settings(BaseSettings):
     def redis_url(self) -> str:
         """
         Construct Redis connection URL.
-        
+
+        If REDIS_PASSWORD is set the URL takes the form:
+            redis://:password@host:port/db
+        The leading colon before the password is mandatory — it separates the
+        (empty) username from the password in the authority component.
+
         Returns:
             str: Redis connection URL
         """
+        if self.REDIS_PASSWORD:
+            return (
+                f"redis://:{self.REDIS_PASSWORD}"
+                f"@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+            )
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
     
     def get_celery_broker_url(self) -> str:

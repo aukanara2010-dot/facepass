@@ -375,22 +375,53 @@ class IndexingService:
                             failed += 1
                             continue
                     
-                    # Extract face embedding and index
-                    success, confidence, faces, error = self.index_photo(
-                        photo_id, session_id, image_data, db
-                    )
+                    # Extract embeddings for ALL detected faces in the photo
+                    face_embeddings = self.face_service.get_embeddings(image_data)
                     
-                    if success:
-                        indexed += 1
-                        print(f'✓ Indexed {os.path.basename(s3_key)} (confidence: {confidence:.2f})')
-                        logger.info(f"Successfully indexed {os.path.basename(s3_key)}")
-                    else:
+                    if not face_embeddings:
                         failed += 1
-                        print(f'✗ Failed to index {os.path.basename(s3_key)}: {error}')
-                        logger.warning(f"Failed to index {os.path.basename(s3_key)}: {error}")
+                        print(f'✗ No faces detected in {os.path.basename(s3_key)}')
+                        logger.warning(f"No faces detected in {os.path.basename(s3_key)}")
+                        continue
+                    
+                    logger.info(f"Detected {len(face_embeddings)} face(s) in {os.path.basename(s3_key)}")
+                    
+                    # Save a separate FaceEmbedding record for each detected face
+                    photo_indexed = 0
+                    for face_idx, (embedding, confidence) in enumerate(face_embeddings):
+                        # Normalize embedding
+                        embedding_norm = np.linalg.norm(embedding)
+                        if embedding_norm > 0:
+                            embedding = embedding / embedding_norm
+                        
+                        face_record = FaceEmbedding(
+                            photo_id=photo_id,
+                            session_id=session_id,
+                            embedding=embedding.tolist(),
+                            confidence=float(confidence)
+                        )
+                        db.add(face_record)
+                        photo_indexed += 1
+                        logger.debug(
+                            f"Saved face #{face_idx} for photo {photo_id} "
+                            f"(confidence: {confidence:.3f})"
+                        )
+                    
+                    db.commit()
+                    indexed += 1
+                    print(
+                        f'✓ Indexed {os.path.basename(s3_key)} '
+                        f'({photo_indexed} face(s), '
+                        f'confidence: {face_embeddings[0][1]:.2f})'
+                    )
+                    logger.info(
+                        f"Successfully indexed {os.path.basename(s3_key)} "
+                        f"with {photo_indexed} face embedding(s)"
+                    )
                         
                 except Exception as e:
                     failed += 1
+                    db.rollback()
                     logger.error(f"Error processing {s3_key}: {str(e)}")
                     print(f'✗ Error processing {s3_key}: {str(e)}')
             

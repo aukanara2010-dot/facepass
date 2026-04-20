@@ -63,11 +63,10 @@ def get_s3_client():
             aws_secret_access_key=settings.S3_SECRET_KEY,
             region_name=settings.S3_REGION,
             config=Config(
-                signature_version='s3v4',
-                s3={
-                    'payload_signing_enabled': False,  # Disable Content-SHA256 to fix XAmzContentSHA256Mismatch
-                    'addressing_style': 'path'  # Use path-style addressing for compatibility
-                }
+                signature_version='s3',       # Beget S3 требует SigV2 — fix XAmzContentSHA256Mismatch
+                connect_timeout=120,
+                read_timeout=120,
+                s3={'addressing_style': 'path'},
             )
         )
     except Exception as e:
